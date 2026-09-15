@@ -1,0 +1,145 @@
+🎮 Monster Quest — Projet Pokémon-like
+
+Un jeu de rôle inspiré des Pokémon, développé en HTML / CSS / JavaScript vanilla (sans framework ni dépendance externe). Le joueur crée son personnage, choisit une créature de départ, puis explore une carte du monde divisée en plusieurs zones.
+
+📋 Sommaire
+Aperçu
+Stack technique
+Structure du projet
+Lancer le jeu
+Contrôles
+Fonctionnalités implémentées
+Détail des systèmes
+Suivi de projet (Agile)
+Roadmap
+Crédits
+🧭 Aperçu
+
+Monster Quest reprend la formule classique des jeux de capture de créatures :
+
+Le joueur entre son pseudo.
+Il choisit une créature de départ parmi 3 propositions (Feu / Plante / Eau).
+Il explore une carte du monde en 2D vue du dessus, découpée en 4 zones (village, forêt, lac, désert).
+Sa progression (pseudo, créature, position) est automatiquement sauvegardée dans le navigateur.
+
+Le projet est actuellement en phase de développement itératif (sprints), avec un backlog de 19 user stories couvrant à terme le combat, la capture, l'évolution, l'inventaire et le multijoueur.
+
+🛠 Stack technique
+Composant	Technologie
+Structure	HTML5
+Style	CSS3
+Logique de jeu	JavaScript (ES6, vanilla — aucune librairie)
+Rendu de la carte	Canvas 2D (CanvasRenderingContext2D)
+Sauvegarde	localStorage du navigateur
+Assets	Sprites PNG des créatures (fakemon_creatures/)
+
+Aucune installation, build, ni serveur n'est requis : le jeu tourne entièrement côté client.
+
+📁 Structure du projet
+Projet-pokemon-like/
+├── index.html              # Structure des 3 écrans (accueil, sélection, jeu)
+├── style.css                # Habillage visuel des écrans et de la carte
+├── game.js                   # Toute la logique : joueur, carte, sauvegarde, rendu
+├── nom fakemons.txt          # Liste de noms de créatures (référentiel de nommage)
+├── fakemon_creatures/         # 142 sprites PNG de créatures (001.png à 151.png)
+└── projet/                   # Documentation de suivi de projet
+    ├── user_stories.md        # Backlog complet (19 user stories)
+    ├── sprint1.md              # Détail du sprint 1 (à compléter)
+    └── project_backlog.md      # Backlog produit (à compléter)
+▶️ Lancer le jeu
+
+Aucun serveur n'est nécessaire :
+
+Ouvrir le fichier index.html directement dans un navigateur (double-clic, ou clic droit → Ouvrir avec).
+Entrer un pseudo, cliquer sur COMMENCER.
+Choisir sa créature de départ.
+Se déplacer sur la carte.
+
+💡 Pour un rendu optimal des chemins d'images relatifs, il est recommandé d'ouvrir le projet via un petit serveur local (ex. extension "Live Server" de VS Code) plutôt qu'en file:// direct, selon les navigateurs.
+
+🎹 Contrôles
+Action	Touches
+Se déplacer vers le haut	↑ ou Z
+Se déplacer vers le bas	↓ ou S
+Se déplacer vers la gauche	← ou Q
+Se déplacer vers la droite	→ ou D
+
+Le déplacement est bloqué par les tuiles non franchissables (eau, arbres, rochers, maisons).
+
+✅ Fonctionnalités implémentées
+
+Correspond au Sprint 1, terminé (voir Suivi de projet) :
+
+Création du personnage — saisie et validation d'un pseudo (US01).
+Sélection de la créature de départ — 3 starters (Flamant/Feu, Salasaur/Plante, Aquali/Eau) affichés avec sprite, nom et type.
+Carte du monde explorable — génération procédurale d'une carte de 30×24 tuiles, divisée en 4 zones :
+🏘️ Village de Départ (haut-gauche)
+🌲 Forêt Sombre (haut-droite)
+🌊 Lac Azur (bas-gauche)
+🏜️ Route Sablonneuse (bas-droite)
+Déplacement fluide — mouvement tuile par tuile avec interpolation pixel (animation de glissement), gestion des collisions.
+Caméra suiveuse — la vue suit le joueur et reste bornée aux limites de la carte.
+Indicateur de zone — affichage du nom de la zone courante, mis à jour dynamiquement.
+Sauvegarde automatique — pseudo, créature choisie et position sont persistés via localStorage et restaurés à la réouverture du jeu.
+⚙️ Détail des systèmes
+Génération de la carte (buildMap)
+
+La carte est construite par composition de plusieurs fonctions déterministes :
+
+getBaseTile : attribue un terrain de base selon le quadrant (herbe, herbe foncée, sable, désert).
+placeVillage : place 6 maisons et des fleurs disséminées selon un motif modulo.
+placeForest : place des arbres selon un motif modulo dans le quadrant nord-est.
+placeLake : dessine un lac elliptique dans le quadrant sud-ouest.
+placeDesert : place des rochers dans le quadrant sud-est.
+Un chemin central (PATH) relie les 4 zones entre elles.
+Déplacement du joueur
+Position logique en tuiles (tileX/tileY) + position en pixels interpolée (pixelX/pixelY) pour une animation fluide.
+tryMove vérifie les limites de la carte et la marchabilité (walkable) de la tuile ciblée avant d'autoriser le déplacement.
+updatePlayer lit les touches pressées (pressedKeys) et applique un déplacement uniquement lorsque le joueur n'est pas déjà en mouvement.
+Rendu (Canvas)
+Seules les tuiles visibles à l'écran sont dessinées (calcul de startCol/endCol/startRow/endRow selon la caméra), pour la performance.
+Chaque type de décor (arbre, rocher, maison, fleur, eau) a son propre dessin vectoriel simple sur le canvas.
+Le personnage est dessiné avec une ombre, un corps, une tête et un triangle indiquant la direction actuelle.
+Sauvegarde (saveGame / loadGame)
+Sérialisation de l'objet currentPlayer (pseudo, creature, position) en JSON dans localStorage.
+Au chargement de la page, loadGame restaure automatiquement une partie existante et saute directement à l'écran de jeu.
+📊 Suivi de projet (Agile)
+Sprint 1 — Terminé ✅
+
+Objectif : permettre au joueur de créer son personnage et de démarrer l'aventure avec sa créature.
+
+#	User Story	Statut
+US01	Création du personnage (pseudo)	✅ Terminé
+US02	Choix de la créature de départ parmi 3	✅ Terminé
+—	Déplacement du personnage sur la carte du monde	✅ Terminé
+Sprint 2 — À venir 🔜
+
+Objectif : introduire les mécaniques de rencontre, d'interaction et de capture des créatures sauvages.
+
+#	User Story	Priorité
+US_rencontre	Déclenchement aléatoire d'une rencontre en hautes herbes	Haute
+US03	Interaction avec les PNJ	Moyenne
+US04	Capture d'une créature sauvage avec une sphère	Haute
+🗺 Roadmap
+
+Ordre de développement conseillé pour la suite (backlog complet dans projet/user_stories.md) :
+
+Rencontre avec une créature sauvage
+Combat contre une créature sauvage (US06)
+Utilisation d'une attaque (US08)
+Capture d'une créature (US04)
+Probabilité de capture selon PV/niveau (US05)
+Organisation de l'équipe, max 6 créatures (US10)
+Gain d'expérience (US12)
+Stockage des créatures (US11)
+Boutique et objets (US14, US15)
+Centre de soin (US16)
+Évolution des créatures (US13)
+Interaction PNJ et combats de dresseurs (US03, US07)
+Répertoire des créatures (US09)
+Sauvegarde avancée (US17)
+Fonctionnalités multijoueur : combat et échange (US19, US18)
+🙌 Crédits
+Sprites de créatures : fakemon_creatures/ (142 illustrations).
+Noms de créatures : nom fakemons.txt.
+Développement : équipe du projet Monster Quest.
