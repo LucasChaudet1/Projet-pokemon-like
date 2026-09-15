@@ -1,0 +1,105 @@
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #222;
+    color: white;
+}
+
+/* Écrans */
+
+.screen {
+    width: 100vw;
+    height: 100vh;
+
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+/* Écran d'accueil */
+
+#startScreen {
+    background: linear-gradient(135deg, #4facfe, #00c6ff);
+}
+
+#startScreen h1 {
+    font-size: 60px;
+    margin-bottom: 10px;
+    text-shadow: 4px 4px 0px #333;
+}
+
+#startScreen p {
+    font-size: 20px;
+    margin-bottom: 30px;
+}
+
+#pseudoInput {
+    width: 280px;
+    padding: 15px;
+
+    border: none;
+    border-radius: 8px;
+
+    font-size: 18px;
+    text-align: center;
+
+    outline: none;
+}
+
+#startButton {
+    margin-top: 20px;
+
+    padding: 15px 40px;
+
+    border: none;
+    border-radius: 8px;
+
+    background: #ffcc00;
+    color: #222;
+
+    font-size: 18px;
+    font-weight: bold;
+
+    cursor: pointer;
+}
+
+#startButton:hover {
+    background: #ffd633;
+    transform: scale(1.05);
+}
+
+/* Écran du jeu */
+
+#gameScreen {
+    position: relative;
+    background: #75b84c;
+}
+
+/* Pseudo */
+
+#playerName {
+    position: absolute;
+
+    top: 20px;
+    left: 20px;
+
+    background: rgba(0, 0, 0, 0.7);
+
+    padding: 10px 15px;
+
+    border-radius: 8px;
+
+    font-size: 20px;
+    font-weight: bold;
+}
+
+/* Cacher un élément */
+
+.hidden {
+    display: none;
+}

@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monster Quest</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <!-- ÉCRAN D'ACCUEIL -->
+    <div id="startScreen" class="screen">
+
+        <h1>MONSTER QUEST</h1>
+
+        <p>Bienvenue dans ton aventure !</p>
+
+        <input
+            type="text"
+            id="pseudoInput"
+            placeholder="Entre ton pseudo"
+            maxlength="15"
+        >
+
+        <button id="startButton">
+            COMMENCER
+        </button>
+
+    </div>
+
+
+    <!-- ÉCRAN DU JEU -->
+    <div id="gameScreen" class="screen hidden">
+
+        <!-- PSEUDO EN HAUT À GAUCHE -->
+        <div id="playerName"></div>
+
+        <h2>Bienvenue dans le jeu !</h2>
+
+    </div>
+
+
+    <script src="game.js"></script>
+</body>
+</html>
