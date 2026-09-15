@@ -30,11 +30,27 @@
     </div>
 
 
+    <!-- ÉCRAN DE SÉLECTION DE CRÉATURE -->
+    <div id="creatureScreen" class="screen hidden">
+
+        <h1>Choisissez votre créature de départ !</h1>
+        <p>Quelle créature veux-tu comme compagnon ?</p>
+
+        <div id="creatureSelection" class="creature-selection">
+            <!-- Les créatures seront générées par JavaScript -->
+        </div>
+
+    </div>
+
+
     <!-- ÉCRAN DU JEU -->
     <div id="gameScreen" class="screen hidden">
 
-        <!-- PSEUDO EN HAUT À GAUCHE -->
-        <div id="playerName"></div>
+        <!-- PSEUDO ET CRÉATURE EN HAUT -->
+        <div class="top-bar">
+            <div id="playerName"></div>
+            <div id="startingCreature" class="starting-creature"></div>
+        </div>
 
         <h2>Bienvenue dans le jeu !</h2>
 

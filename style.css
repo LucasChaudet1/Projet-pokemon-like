@@ -103,3 +103,116 @@ body {
 .hidden {
     display: none;
 }
+
+/* Écran de sélection de créature */
+
+#creatureScreen {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+}
+
+#creatureScreen h1 {
+    font-size: 48px;
+    margin-bottom: 10px;
+    text-shadow: 4px 4px 0px #333;
+    color: #ffff00;
+}
+
+#creatureScreen p {
+    font-size: 20px;
+    margin-bottom: 40px;
+    color: white;
+}
+
+.creature-selection {
+    display: flex;
+    gap: 40px;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.creature-card {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    cursor: pointer;
+    transition: transform 0.3s, box-shadow 0.3s;
+    text-align: center;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    min-width: 150px;
+}
+
+.creature-card:hover {
+    transform: translateY(-10px);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
+}
+
+.creature-card.selected {
+    background: #ffff00;
+    box-shadow: 0 0 20px #ffff00;
+    transform: scale(1.1);
+}
+
+.creature-card img {
+    width: 120px;
+    height: 120px;
+    object-fit: contain;
+    margin-bottom: 10px;
+}
+
+.creature-card h3 {
+    color: #333;
+    margin: 10px 0 5px 0;
+    font-size: 18px;
+}
+
+.creature-card p {
+    color: #666;
+    font-size: 12px;
+    margin: 0;
+}
+
+.creature-card button {
+    margin-top: 15px;
+    padding: 10px 20px;
+    background: #ffcc00;
+    color: #222;
+    border: none;
+    border-radius: 6px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+.creature-card button:hover {
+    background: #ffd633;
+}
+
+/* Barre supérieure du jeu */
+
+.top-bar {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    right: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    z-index: 10;
+}
+
+.starting-creature {
+    background: rgba(0, 0, 0, 0.7);
+    padding: 10px 15px;
+    border-radius: 8px;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.starting-creature img {
+    width: 40px;
+    height: 40px;
+    object-fit: contain;
+}
