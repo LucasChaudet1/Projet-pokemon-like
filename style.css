@@ -242,18 +242,18 @@ body {
 
 .team-creature-info {
     position: absolute;
-
-    right: 70px;
-    top: 0;
+    top: 72px;
+    right: 0;
 
     width: 130px;
 
-    background: rgba(0, 0, 0, 0.9);
+    background: rgba(0, 0, 0, 0.95);
     border-radius: 8px;
 
     padding: 8px;
 
     display: none;
+    z-index: 20;
 }
 
 .team-creature:hover .team-creature-info {
