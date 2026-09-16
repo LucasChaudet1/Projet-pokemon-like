@@ -283,27 +283,3 @@
 - [ ] Le vainqueur est déterminé lorsque l'équipe adverse est K.O.
 
 **Priorité :** Basse
-
----
-
-# Ordre de développement conseillé
-
-1. **US01** — Déplacement du personnage
-2. **US02** — Rencontre avec une créature sauvage
-3. **US06** — Combat contre une créature sauvage
-4. **US08** — Utilisation d'une attaque
-5. **US04** — Capture d'une créature
-6. **US05** — Probabilité de capture
-7. **US10** — Organisation de l'équipe
-8. **US12** — Gain d'expérience
-9. **US11** — Stockage des créatures
-10. **US14** — Achat d'objets
-11. **US15** — Utilisation d'un objet de soin
-12. **US16** — Centre de soin
-13. **US13** — Évolution des créatures
-14. **US03** — Interaction avec les PNJ
-15. **US07** — Combat contre un dresseur PNJ
-16. **US09** — Répertoire des créatures
-17. **US17** — Sauvegarde de la progression
-18. **US19** — Combat entre joueurs
-19. **US18** — Échange entre joueurs
