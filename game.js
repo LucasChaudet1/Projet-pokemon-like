@@ -9,6 +9,7 @@ const playerName = document.getElementById("playerName");
 const teamDisplay = document.getElementById("teamDisplay");
 const creatureSelection = document.getElementById("creatureSelection");
 const pokedexButton = document.getElementById("pokedexButton");
+const moneyDisplay = document.getElementById("moneyDisplay");
 
 const zoneLabel = document.getElementById("zoneLabel");
 const canvas = document.getElementById("gameCanvas");
@@ -88,6 +89,28 @@ function pickRandomMove(creature) {
     return creature.attacks[Math.floor(Math.random() * creature.attacks.length)];
 }
 
+// Objets en vente à la boutique
+const SHOP_ITEMS = [
+    {
+        id: "potion",
+        name: "Potion",
+        icon: "🧪",
+        price: 15,
+        description: "Soigne 20 PV d'une créature."
+    },
+    {
+        id: "capture_sphere",
+        name: "Sphère de Capture",
+        icon: "🔴",
+        price: 25,
+        description: "Permet de tenter de capturer une créature sauvage."
+    }
+];
+
+function getShopItem(id) {
+    return SHOP_ITEMS.find(item => item.id === id) || null;
+}
+
 // Personnages non-joueurs du village
 const NPCS = [
     {
@@ -109,13 +132,12 @@ const NPCS = [
         tileX: 11,
         tileY: 4,
         color: "#c2478c",
-        type: "item",
-        icon: "🎁",
+        type: "shop",
+        icon: "🛒",
         lines: [
-            "Tiens, prends ceci pour ton voyage !"
-        ],
-        itemId: "potion",
-        itemName: "Potion"
+            "Bienvenue dans ma boutique !",
+            "J'ai de quoi t'aider pour l'exploration et le combat."
+        ]
     },
     {
         id: "trainer",
@@ -139,7 +161,8 @@ let currentPlayer = {
     npcGifts: [],
     activeCreature: 0,
     position: null,
-    pokedex: { seen: [], caught: [] }
+    pokedex: { seen: [], caught: [] },
+    money: 300
 };
 
 const MAX_TEAM_SIZE = 6;
@@ -238,6 +261,10 @@ function createCreature(id, name, type, level = 5) {
 
         attacks: getMovesForType(type)
     };
+}
+
+function updateMoneyDisplay() {
+    moneyDisplay.textContent = `💰 ${currentPlayer.money}`;
 }
 
 function updateTeamDisplay() {
@@ -551,6 +578,7 @@ function selectCreature(id, name, type) {
     playerName.textContent = "👤 " + currentPlayer.pseudo;
 
     updateTeamDisplay();
+    updateMoneyDisplay();
 
     creatureScreen.classList.add("hidden");
     gameScreen.classList.remove("hidden");
@@ -658,6 +686,15 @@ function loadGame() {
 
 
     // =========================
+    // ARGENT (anciennes sauvegardes)
+    // =========================
+
+    if (typeof currentPlayer.money !== "number") {
+        currentPlayer.money = 300;
+    }
+
+
+    // =========================
     // CRÉATURE ACTIVE
     // =========================
 
@@ -692,6 +729,7 @@ function loadGame() {
         "👤 " + currentPlayer.pseudo;
 
     updateTeamDisplay();
+    updateMoneyDisplay();
 
     startScreen.classList.add("hidden");
     creatureScreen.classList.add("hidden");
@@ -1178,6 +1216,7 @@ let currentMap = "world";
 
 let pcOpen = false;
 let pokedexOpen = false;
+let shopOpen = false;
 
 let encounterOpen = false;
 let wildEncounterCreature = null;
@@ -1335,6 +1374,16 @@ document.addEventListener("keydown", (e) => {
 
         if (key === "e" || key === "Escape") {
             closePokedex();
+        }
+
+        return;
+    }
+
+    // Boutique ouverte
+    if (shopOpen) {
+
+        if (key === "e" || key === "Escape") {
+            closeShop();
         }
 
         return;
@@ -1560,6 +1609,12 @@ function resolveDialogueOutcome(npc) {
             textEl.textContent =
                 "Les combats de dresseurs arriveront dans une prochaine mise à jour !";
         }
+
+    } else if (npc.type === "shop") {
+
+        closeDialogue();
+        openShop();
+        return;
 
     } else {
         closeDialogue();
@@ -1862,9 +1917,13 @@ function renderBattleActions() {
 
     if (!actionsEl) return;
 
+    const sphereCount = currentPlayer.inventory.filter(
+        item => item.id === "capture_sphere"
+    ).length;
+
     actionsEl.innerHTML = `
         <button id="battleAttackButton">⚔️ Attaquer</button>
-        <button id="battleCaptureButton">🔴 Capturer</button>
+        <button id="battleCaptureButton">🔴 Capturer (${sphereCount})</button>
         <button id="battleHealButton">💊 Soigner</button>
         <button id="battleFleeButton">🏃 Fuir</button>
     `;
@@ -2079,6 +2138,18 @@ function playerCapture() {
 
     if (!battleOpen || battleEnded) return;
 
+    const sphereIndex = currentPlayer.inventory.findIndex(
+        item => item.id === "capture_sphere"
+    );
+
+    if (sphereIndex === -1) {
+        addBattleLog("❌ Tu n'as aucune Sphère de Capture ! Achète-en à la boutique.");
+        renderBattle();
+        return;
+    }
+
+    currentPlayer.inventory.splice(sphereIndex, 1);
+
     const wild = battleWildCreature;
     const chance = computeCaptureChance(wild);
     const success = Math.random() < chance;
@@ -2092,6 +2163,8 @@ function playerCapture() {
     addBattleLog(`La capture a échoué... ${wild.name} riposte !`);
 
     applyAttack(wild, battlePlayerCreature, pickRandomMove(wild));
+
+    saveGame();
 
     if (battlePlayerCreature.hp <= 0) {
         finishBattleLose();
@@ -2198,7 +2271,8 @@ function updatePlayer() {
         dialogueOpen ||
         battleOpen ||
         pcOpen ||
-        pokedexOpen
+        pokedexOpen ||
+        shopOpen
     ) {
         return;
     }
@@ -2627,6 +2701,127 @@ function updatePokedexDisplay() {
         `;
 
         pokedexList.appendChild(card);
+    });
+}
+
+function openShop() {
+
+    shopOpen = true;
+    pressedKeys.clear();
+
+    const shopWindow = document.createElement("div");
+
+    shopWindow.id = "shopWindow";
+
+    shopWindow.innerHTML = `
+        <div class="pc-box">
+
+            <div class="pc-header">
+                <h2>🛒 Boutique</h2>
+                <button id="closeShopButton">✕</button>
+            </div>
+
+            <p class="shop-money" id="shopMoney"></p>
+
+            <div id="shopList"></div>
+
+            <p class="pc-hint">
+                Appuie sur <strong>E</strong> ou <strong>Échap</strong> pour fermer
+            </p>
+
+        </div>
+    `;
+
+    document.body.appendChild(shopWindow);
+
+    document
+        .getElementById("closeShopButton")
+        .addEventListener("click", closeShop);
+
+    updateShopDisplay();
+}
+
+function closeShop() {
+
+    shopOpen = false;
+
+    const shopWindow = document.getElementById("shopWindow");
+
+    if (shopWindow) {
+        shopWindow.remove();
+    }
+}
+
+function buyItem(itemId) {
+
+    const item = getShopItem(itemId);
+
+    if (!item) return;
+
+    if (currentPlayer.money < item.price) {
+        alert("Tu n'as pas assez d'argent !");
+        return;
+    }
+
+    currentPlayer.money -= item.price;
+
+    currentPlayer.inventory.push({
+        id: item.id,
+        name: item.name
+    });
+
+    updateMoneyDisplay();
+    saveGame();
+
+    updateShopDisplay();
+}
+
+function updateShopDisplay() {
+
+    const shopMoney = document.getElementById("shopMoney");
+    const shopList = document.getElementById("shopList");
+
+    if (!shopMoney || !shopList) return;
+
+    shopMoney.textContent = `💰 Argent : ${currentPlayer.money}`;
+
+    shopList.innerHTML = "";
+
+    SHOP_ITEMS.forEach(item => {
+
+        const owned = currentPlayer.inventory.filter(
+            invItem => invItem.id === item.id
+        ).length;
+
+        const affordable = currentPlayer.money >= item.price;
+
+        const card = document.createElement("div");
+
+        card.className = "shop-item";
+
+        card.innerHTML = `
+            <div class="shop-item-icon">${item.icon}</div>
+
+            <div class="shop-item-info">
+                <strong>${item.name}</strong>
+                <span>${item.description}</span>
+                <span class="shop-item-owned">Possédé(s) : ${owned}</span>
+            </div>
+
+            <button
+                class="shop-buy-button"
+                data-item-id="${item.id}"
+                ${affordable ? "" : "disabled"}
+            >
+                Acheter (${item.price} 💰)
+            </button>
+        `;
+
+        shopList.appendChild(card);
+    });
+
+    shopList.querySelectorAll(".shop-buy-button").forEach(button => {
+        button.addEventListener("click", () => buyItem(button.dataset.itemId));
     });
 }
 

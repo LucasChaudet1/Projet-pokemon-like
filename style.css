@@ -98,6 +98,25 @@ body {
     font-weight: bold;
 }
 
+/* Affichage de l'argent */
+
+.money-display {
+    position: absolute;
+
+    top: 20px;
+    left: 220px;
+
+    background: rgba(0, 0, 0, 0.7);
+    color: #ffd633;
+
+    padding: 10px 15px;
+
+    border-radius: 8px;
+
+    font-size: 16px;
+    font-weight: bold;
+}
+
 /* Bouton du Pokédex */
 
 .pokedex-button {
@@ -592,6 +611,106 @@ body {
 
 .pokedex-entry.seen-only .pokedex-status {
     color: #6b7280;
+}
+
+
+/* =========================
+   BOUTIQUE
+   ========================= */
+
+#shopWindow {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+
+    display: flex;
+    justify-content: center;
+    align-items: center;
+
+    background: rgba(0, 0, 0, 0.65);
+
+    z-index: 9999;
+}
+
+.shop-money {
+    margin: 0 0 16px;
+    color: #92660b;
+    font-weight: bold;
+}
+
+#shopList {
+    display: flex;
+    flex-direction: column;
+
+    gap: 12px;
+}
+
+.shop-item {
+    display: flex;
+    align-items: center;
+
+    gap: 14px;
+
+    padding: 12px;
+
+    background: white;
+
+    border: 2px solid #d1d5db;
+    border-radius: 10px;
+}
+
+.shop-item-icon {
+    font-size: 32px;
+}
+
+.shop-item-info {
+    flex: 1;
+
+    display: flex;
+    flex-direction: column;
+
+    gap: 3px;
+}
+
+.shop-item-info strong {
+    font-size: 16px;
+}
+
+.shop-item-info span {
+    font-size: 13px;
+    color: #6b7280;
+}
+
+.shop-item-owned {
+    font-size: 12px;
+    color: #16a34a;
+    font-weight: bold;
+}
+
+.shop-buy-button {
+    padding: 10px 14px;
+
+    border: none;
+    border-radius: 8px;
+
+    background: #4b8ee8;
+    color: white;
+
+    font-weight: bold;
+    cursor: pointer;
+
+    white-space: nowrap;
+}
+
+.shop-buy-button:hover {
+    background: #3b75c9;
+}
+
+.shop-buy-button:disabled {
+    background: #9ca3af;
+    cursor: not-allowed;
 }
 
 
