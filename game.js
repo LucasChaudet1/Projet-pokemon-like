@@ -22,17 +22,103 @@ const STARTER_CREATURES = [
     { id: 7, name: "Aquali", type: "Eau" }
 ];
 
-// Créatures sauvages pouvant apparaître dans les hautes herbes
-const WILD_CREATURES = [
-    { id: 10, name: "Rosapin", type: "Plante" },
-    { id: 11, name: "Rosélia", type: "Plante" },
-    { id: 16, name: "Lunégriff", type: "Normal" },
-    { id: 19, name: "Champignon", type: "Plante" },
-    { id: 20, name: "Aquapin", type: "Eau" },
-    { id: 21, name: "Électrisson", type: "Normal" },
-    { id: 24, name: "Serpentis", type: "Normal" },
-    { id: 28, name: "Crabraz", type: "Eau" }
-];
+// Espèces sauvages disponibles par zone, avec le niveau des créatures qu'on y rencontre
+// (plus la zone est éloignée du village, plus les créatures y sont hautes en niveau)
+const ZONE_WILD_DATA = {
+    "🏘️ Bourg Palette": {
+        minLevel: 2,
+        maxLevel: 6,
+        creatures: [
+            { id: 10, name: "Rosapin", type: "Plante" },
+            { id: 16, name: "Lunégriff", type: "Normal" },
+            { id: 36, name: "Nébulapin", type: "Plante" },
+            { id: 47, name: "Queueflor", type: "Plante" },
+            { id: 62, name: "Vénépine", type: "Plante" },
+            { id: 76, name: "Voltichat", type: "Plante" },
+            { id: 102, name: "Ténébrûle", type: "Plante" },
+            { id: 135, name: "Roncours", type: "Plante" },
+            { id: 142, name: "Pétalys", type: "Plante" },
+        ]
+    },
+    "🌊 Lac Azur": {
+        minLevel: 2,
+        maxLevel: 6,
+        creatures: [
+            { id: 20, name: "Aquapin", type: "Eau" },
+            { id: 28, name: "Crabraz", type: "Eau" },
+            { id: 42, name: "Aquaboule", type: "Eau" },
+            { id: 71, name: "Aquaryx", type: "Eau" },
+            { id: 79, name: "Brutalynx", type: "Eau" },
+            { id: 88, name: "Aquabris", type: "Eau" },
+            { id: 96, name: "Aqualou", type: "Eau" },
+            { id: 111, name: "Électriva", type: "Eau" },
+            { id: 120, name: "Aqualame", type: "Eau" },
+            { id: 126, name: "Tonnerreux", type: "Eau" },
+        ]
+    },
+    "🌲 Forêt Sombre": {
+        minLevel: 7,
+        maxLevel: 12,
+        creatures: [
+            { id: 19, name: "Champignon", type: "Plante" },
+            { id: 17, name: "Floramie", type: "Plante" },
+            { id: 25, name: "Mousselin", type: "Plante" },
+            { id: 39, name: "Cactulin", type: "Plante" },
+            { id: 56, name: "Aéribou", type: "Plante" },
+            { id: 74, name: "Champépin", type: "Plante" },
+            { id: 94, name: "Champibois", type: "Plante" },
+            { id: 129, name: "Papilys", type: "Plante" },
+            { id: 138, name: "Lunéclair", type: "Plante" },
+            { id: 148, name: "Sylvadrake", type: "Plante" },
+        ]
+    },
+    "🏜️ Route Sablonneuse": {
+        minLevel: 7,
+        maxLevel: 12,
+        creatures: [
+            { id: 21, name: "Électrisson", type: "Normal" },
+            { id: 24, name: "Serpentis", type: "Normal" },
+            { id: 45, name: "Feuillodon", type: "Feu" },
+            { id: 59, name: "Braséonix", type: "Feu" },
+            { id: 85, name: "Lunélys", type: "Feu" },
+            { id: 108, name: "Cendryx", type: "Feu" },
+            { id: 132, name: "Brasifureur", type: "Feu" },
+            { id: 145, name: "Sombrafée", type: "Normal" },
+            { id: 151, name: "Noctéroc", type: "Normal" },
+        ]
+    },
+    "🌋 Zone Volcanique": {
+        minLevel: 13,
+        maxLevel: 20,
+        creatures: [
+            { id: 12, name: "Brasiflam", type: "Feu" },
+            { id: 30, name: "Giraflamm", type: "Feu" },
+            { id: 33, name: "Raptiblu", type: "Feu" },
+            { id: 50, name: "Félinflam", type: "Feu" },
+            { id: 68, name: "Ténébrix", type: "Feu" },
+            { id: 105, name: "Aquaflamm", type: "Feu" },
+            { id: 114, name: "Flamécaille", type: "Feu" },
+        ]
+    },
+    "❄️ Zone Arctique": {
+        minLevel: 13,
+        maxLevel: 20,
+        creatures: [
+            { id: 14, name: "Vampibou", type: "Normal" },
+            { id: 22, name: "Oursonyx", type: "Normal" },
+            { id: 53, name: "Papilune", type: "Eau" },
+            { id: 65, name: "Féraloup", type: "Normal" },
+            { id: 82, name: "Glacibulle", type: "Eau" },
+            { id: 91, name: "Givrelame", type: "Eau" },
+            { id: 99, name: "Noctyra", type: "Eau" },
+            { id: 117, name: "Hydrourson", type: "Eau" },
+            { id: 123, name: "Givrou", type: "Eau" },
+        ]
+    },
+};
+
+// Toutes les espèces sauvages de base (hors évolutions), à plat pour le Pokédex
+const WILD_CREATURES = Object.values(ZONE_WILD_DATA).flatMap(zone => zone.creatures);
 
 const WILD_ENCOUNTER_CHANCE = 0.12;
 const WILD_MIN_LEVEL = 2;
@@ -45,7 +131,86 @@ const EVOLVED_SPECIES = [
     { id: 5, name: "Salaflore", type: "Plante" },
     { id: 6, name: "Saladraxe", type: "Plante" },
     { id: 8, name: "Aqualon", type: "Eau" },
-    { id: 9, name: "Aquatitan", type: "Eau" }
+    { id: 9, name: "Aquatitan", type: "Eau" },
+    { id: 11, name: "Rosélia", type: "Plante" },
+    { id: 15, name: "Dracoryx", type: "Normal" },
+    { id: 18, name: "Roncépine", type: "Plante" },
+    { id: 23, name: "Givrillon", type: "Normal" },
+    { id: 26, name: "Ombrelynx", type: "Plante" },
+    { id: 27, name: "Glacelin", type: "Plante" },
+    { id: 31, name: "Corbécaille", type: "Feu" },
+    { id: 32, name: "Félinrose", type: "Feu" },
+    { id: 34, name: "Flamèche", type: "Feu" },
+    { id: 35, name: "Roncroc", type: "Feu" },
+    { id: 37, name: "Sombryx", type: "Plante" },
+    { id: 38, name: "Scorplume", type: "Plante" },
+    { id: 40, name: "Blobelin", type: "Plante" },
+    { id: 41, name: "Mousseron", type: "Plante" },
+    { id: 43, name: "Givrapin", type: "Eau" },
+    { id: 44, name: "Pyrogriff", type: "Eau" },
+    { id: 48, name: "Pétalune", type: "Plante" },
+    { id: 49, name: "Aquilame", type: "Plante" },
+    { id: 51, name: "Noctifée", type: "Feu" },
+    { id: 52, name: "Éclipsia", type: "Feu" },
+    { id: 54, name: "Corallin", type: "Eau" },
+    { id: 55, name: "Volcanin", type: "Eau" },
+    { id: 57, name: "Florécorne", type: "Plante" },
+    { id: 58, name: "Cristalys", type: "Plante" },
+    { id: 60, name: "Nuagelin", type: "Feu" },
+    { id: 63, name: "Sombroux", type: "Plante" },
+    { id: 64, name: "Métalou", type: "Plante" },
+    { id: 66, name: "Givrours", type: "Normal" },
+    { id: 67, name: "Évolyn", type: "Normal" },
+    { id: 69, name: "Feuillix", type: "Feu" },
+    { id: 70, name: "Rosabri", type: "Feu" },
+    { id: 72, name: "Pyrolynx", type: "Eau" },
+    { id: 73, name: "Rocacier", type: "Eau" },
+    { id: 77, name: "Lunapin", type: "Plante" },
+    { id: 78, name: "Ombregriffe", type: "Plante" },
+    { id: 80, name: "Coraloup", type: "Eau" },
+    { id: 81, name: "Bourrisson", type: "Eau" },
+    { id: 83, name: "Flamicroc", type: "Eau" },
+    { id: 84, name: "Feuillours", type: "Eau" },
+    { id: 86, name: "Noirécaille", type: "Feu" },
+    { id: 87, name: "Igniflame", type: "Feu" },
+    { id: 89, name: "Rosabulle", type: "Eau" },
+    { id: 90, name: "Électryl", type: "Eau" },
+    { id: 92, name: "Sombrafang", type: "Eau" },
+    { id: 93, name: "Jellyflam", type: "Eau" },
+    { id: 97, name: "Flammour", type: "Eau" },
+    { id: 98, name: "Serpiflor", type: "Eau" },
+    { id: 100, name: "Éclatix", type: "Eau" },
+    { id: 101, name: "Givrélion", type: "Eau" },
+    { id: 103, name: "Sylvaroc", type: "Plante" },
+    { id: 104, name: "Grizzarbre", type: "Plante" },
+    { id: 106, name: "Roséclair", type: "Feu" },
+    { id: 109, name: "Bourgelin", type: "Feu" },
+    { id: 110, name: "Sombrefée", type: "Feu" },
+    { id: 112, name: "Rocaglace", type: "Eau" },
+    { id: 113, name: "Feuillou", type: "Eau" },
+    { id: 115, name: "Abyssour", type: "Feu" },
+    { id: 116, name: "Pétabulle", type: "Feu" },
+    { id: 118, name: "Cornéclair", type: "Eau" },
+    { id: 119, name: "Brasédrake", type: "Eau" },
+    { id: 121, name: "Noctiflore", type: "Eau" },
+    { id: 122, name: "Roncédrac", type: "Eau" },
+    { id: 124, name: "Féralacier", type: "Eau" },
+    { id: 127, name: "Électrours", type: "Eau" },
+    { id: 128, name: "Aquapince", type: "Eau" },
+    { id: 130, name: "Sylvaflore", type: "Plante" },
+    { id: 131, name: "Glacécroc", type: "Plante" },
+    { id: 133, name: "Ombryon", type: "Feu" },
+    { id: 134, name: "Cristabulle", type: "Feu" },
+    { id: 136, name: "Moussépine", type: "Plante" },
+    { id: 137, name: "Ténéflore", type: "Plante" },
+    { id: 139, name: "Noctacier", type: "Plante" },
+    { id: 140, name: "Floréclat", type: "Plante" },
+    { id: 143, name: "Mégalithe", type: "Plante" },
+    { id: 144, name: "Foudragon", type: "Plante" },
+    { id: 146, name: "Givralys", type: "Normal" },
+    { id: 147, name: "Volcaroc", type: "Normal" },
+    { id: 149, name: "Hydrogriff", type: "Plante" },
+    { id: 150, name: "Luminours", type: "Plante" },
 ];
 
 // Toutes les espèces pouvant apparaître dans le jeu (pour le Pokédex)
@@ -59,7 +224,85 @@ const EVOLUTIONS = {
     5: { id: 6, level: 32 },
     7: { id: 8, level: 16 },
     8: { id: 9, level: 32 },
-    10: { id: 11, level: 18 }
+    10: { id: 11, level: 18 },
+    14: { id: 15, level: 16 },
+    17: { id: 18, level: 16 },
+    22: { id: 23, level: 16 },
+    25: { id: 26, level: 16 },
+    26: { id: 27, level: 32 },
+    30: { id: 31, level: 16 },
+    31: { id: 32, level: 32 },
+    33: { id: 34, level: 16 },
+    34: { id: 35, level: 32 },
+    36: { id: 37, level: 16 },
+    37: { id: 38, level: 32 },
+    39: { id: 40, level: 16 },
+    40: { id: 41, level: 32 },
+    42: { id: 43, level: 16 },
+    43: { id: 44, level: 32 },
+    47: { id: 48, level: 16 },
+    48: { id: 49, level: 32 },
+    50: { id: 51, level: 16 },
+    51: { id: 52, level: 32 },
+    53: { id: 54, level: 16 },
+    54: { id: 55, level: 32 },
+    56: { id: 57, level: 16 },
+    57: { id: 58, level: 32 },
+    59: { id: 60, level: 16 },
+    62: { id: 63, level: 16 },
+    63: { id: 64, level: 32 },
+    65: { id: 66, level: 16 },
+    66: { id: 67, level: 32 },
+    68: { id: 69, level: 16 },
+    69: { id: 70, level: 32 },
+    71: { id: 72, level: 16 },
+    72: { id: 73, level: 32 },
+    76: { id: 77, level: 16 },
+    77: { id: 78, level: 32 },
+    79: { id: 80, level: 16 },
+    80: { id: 81, level: 32 },
+    82: { id: 83, level: 16 },
+    83: { id: 84, level: 32 },
+    85: { id: 86, level: 16 },
+    86: { id: 87, level: 32 },
+    88: { id: 89, level: 16 },
+    89: { id: 90, level: 32 },
+    91: { id: 92, level: 16 },
+    92: { id: 93, level: 32 },
+    96: { id: 97, level: 16 },
+    97: { id: 98, level: 32 },
+    99: { id: 100, level: 16 },
+    100: { id: 101, level: 32 },
+    102: { id: 103, level: 16 },
+    103: { id: 104, level: 32 },
+    105: { id: 106, level: 16 },
+    108: { id: 109, level: 16 },
+    109: { id: 110, level: 32 },
+    111: { id: 112, level: 16 },
+    112: { id: 113, level: 32 },
+    114: { id: 115, level: 16 },
+    115: { id: 116, level: 32 },
+    117: { id: 118, level: 16 },
+    118: { id: 119, level: 32 },
+    120: { id: 121, level: 16 },
+    121: { id: 122, level: 32 },
+    123: { id: 124, level: 16 },
+    126: { id: 127, level: 16 },
+    127: { id: 128, level: 32 },
+    129: { id: 130, level: 16 },
+    130: { id: 131, level: 32 },
+    132: { id: 133, level: 16 },
+    133: { id: 134, level: 32 },
+    135: { id: 136, level: 16 },
+    136: { id: 137, level: 32 },
+    138: { id: 139, level: 16 },
+    139: { id: 140, level: 32 },
+    142: { id: 143, level: 16 },
+    143: { id: 144, level: 32 },
+    145: { id: 146, level: 16 },
+    146: { id: 147, level: 32 },
+    148: { id: 149, level: 16 },
+    149: { id: 150, level: 32 },
 };
 
 function getSpeciesInfo(id) {
@@ -1845,15 +2088,20 @@ function checkWildEncounter() {
 }
 
 function pickRandomWildCreature() {
-    const species =
-        WILD_CREATURES[
-            Math.floor(Math.random() * WILD_CREATURES.length)
-        ];
+
+    const zoneName = getZoneName(player.tileX, player.tileY);
+    const zoneData = ZONE_WILD_DATA[zoneName];
+
+    const pool = zoneData ? zoneData.creatures : WILD_CREATURES;
+    const minLevel = zoneData ? zoneData.minLevel : WILD_MIN_LEVEL;
+    const maxLevel = zoneData ? zoneData.maxLevel : WILD_MAX_LEVEL;
+
+    const species = pool[Math.floor(Math.random() * pool.length)];
 
     const level =
-        WILD_MIN_LEVEL +
+        minLevel +
         Math.floor(
-            Math.random() * (WILD_MAX_LEVEL - WILD_MIN_LEVEL + 1)
+            Math.random() * (maxLevel - minLevel + 1)
         );
 
     return createCreature(species.id, species.name, species.type, level);
