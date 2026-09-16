@@ -36,10 +36,55 @@ const WILD_ENCOUNTER_CHANCE = 0.12;
 const WILD_MIN_LEVEL = 2;
 const WILD_MAX_LEVEL = 6;
 
+// Personnages non-joueurs du village
+const NPCS = [
+    {
+        id: "elder",
+        name: "Papi Ancien",
+        tileX: 3,
+        tileY: 3,
+        color: "#7a5c3e",
+        type: "dialogue",
+        icon: "💬",
+        lines: [
+            "Bienvenue dans notre village, jeune dresseur !",
+            "Les hautes herbes cachent des créatures sauvages, sois prudent."
+        ]
+    },
+    {
+        id: "merchant",
+        name: "Marchande Léa",
+        tileX: 11,
+        tileY: 4,
+        color: "#c2478c",
+        type: "item",
+        icon: "🎁",
+        lines: [
+            "Tiens, prends ceci pour ton voyage !"
+        ],
+        itemId: "potion",
+        itemName: "Potion"
+    },
+    {
+        id: "trainer",
+        name: "Dresseur Théo",
+        tileX: 3,
+        tileY: 9,
+        color: "#2b6cb0",
+        type: "battle",
+        icon: "⚔️",
+        lines: [
+            "Une créature contre une créature, ça te dit ?"
+        ]
+    }
+];
+
 let currentPlayer = {
     pseudo: "",
     team: [],
     storage: [],
+    inventory: [],
+    npcGifts: [],
     activeCreature: 0,
     position: null
 };
@@ -235,6 +280,14 @@ function loadGame() {
 
     if (!Array.isArray(currentPlayer.storage)) {
         currentPlayer.storage = [];
+    }
+
+    if (!Array.isArray(currentPlayer.inventory)) {
+        currentPlayer.inventory = [];
+    }
+
+    if (!Array.isArray(currentPlayer.npcGifts)) {
+        currentPlayer.npcGifts = [];
     }
 
 
@@ -570,6 +623,10 @@ let pcOpen = false;
 let encounterOpen = false;
 let wildEncounterCreature = null;
 
+let dialogueOpen = false;
+let currentDialogueNPC = null;
+let currentDialogueLineIndex = 0;
+
 const CENTER_COLS = 20;
 const CENTER_ROWS = 15;
 
@@ -674,6 +731,18 @@ document.addEventListener("keydown", (e) => {
         return;
     }
 
+    // Dialogue PNJ en cours
+    if (dialogueOpen) {
+
+        if (key === "e") {
+            advanceDialogue();
+        } else if (key === "Escape") {
+            closeDialogue();
+        }
+
+        return;
+    }
+
     // PC ouvert
     if (pcOpen) {
 
@@ -684,9 +753,11 @@ document.addEventListener("keydown", (e) => {
         return;
     }
 
-    // Interaction avec le PC
+    // Interaction avec un PNJ ou le PC
     if (key === "e") {
-        checkPCInteraction();
+        if (!checkNPCInteraction()) {
+            checkPCInteraction();
+        }
         return;
     }
 
@@ -726,6 +797,10 @@ function tryMove(dx, dy, direction) {
             return;
         }
 
+        if (findNPCAt(newX, newY)) {
+            return;
+        }
+
         player.tileX = newX;
         player.tileY = newY;
 
@@ -761,6 +836,166 @@ function tryMove(dx, dy, direction) {
         player.targetPixelY = newY * TILE_SIZE;
 
         player.moving = true;
+    }
+}
+
+function findNPCAt(x, y) {
+    return NPCS.find(npc => npc.tileX === x && npc.tileY === y) || null;
+}
+
+function getFacingTile() {
+
+    const offsets = {
+        up: [0, -1],
+        down: [0, 1],
+        left: [-1, 0],
+        right: [1, 0]
+    };
+
+    const [dx, dy] = offsets[player.direction] || [0, 1];
+
+    return {
+        x: player.tileX + dx,
+        y: player.tileY + dy
+    };
+}
+
+function checkNPCInteraction() {
+
+    if (currentMap !== "world") return false;
+    if (player.moving) return false;
+
+    const facing = getFacingTile();
+    const npc = findNPCAt(facing.x, facing.y);
+
+    if (!npc) return false;
+
+    startDialogue(npc);
+
+    return true;
+}
+
+function startDialogue(npc) {
+
+    dialogueOpen = true;
+    currentDialogueNPC = npc;
+    currentDialogueLineIndex = 0;
+
+    const dialogueWindow = document.createElement("div");
+
+    dialogueWindow.id = "dialogueWindow";
+
+    dialogueWindow.innerHTML = `
+        <div class="dialogue-box">
+
+            <div class="dialogue-header">
+                <strong>${npc.name}</strong>
+            </div>
+
+            <p id="dialogueText"></p>
+
+            <div class="dialogue-actions">
+                <button id="dialogueNextButton">Continuer ▶</button>
+            </div>
+
+            <p class="dialogue-hint">
+                Appuie sur <strong>E</strong> pour continuer,
+                <strong>Échap</strong> pour fermer
+            </p>
+
+        </div>
+    `;
+
+    document.body.appendChild(dialogueWindow);
+
+    document
+        .getElementById("dialogueNextButton")
+        .addEventListener("click", advanceDialogue);
+
+    renderDialogueLine();
+}
+
+function renderDialogueLine() {
+
+    const textEl = document.getElementById("dialogueText");
+
+    if (!textEl || !currentDialogueNPC) return;
+
+    textEl.textContent =
+        currentDialogueNPC.lines[currentDialogueLineIndex];
+}
+
+function advanceDialogue() {
+
+    if (!currentDialogueNPC) return;
+
+    currentDialogueLineIndex++;
+
+    if (currentDialogueLineIndex < currentDialogueNPC.lines.length) {
+        renderDialogueLine();
+        return;
+    }
+
+    resolveDialogueOutcome(currentDialogueNPC);
+}
+
+function resolveDialogueOutcome(npc) {
+
+    const textEl = document.getElementById("dialogueText");
+    const nextButton = document.getElementById("dialogueNextButton");
+
+    if (npc.type === "item") {
+
+        const alreadyGiven = currentPlayer.npcGifts.includes(npc.id);
+
+        if (!alreadyGiven) {
+
+            currentPlayer.inventory.push({
+                id: npc.itemId,
+                name: npc.itemName
+            });
+
+            currentPlayer.npcGifts.push(npc.id);
+
+            saveGame();
+
+            if (textEl) {
+                textEl.textContent = `Tu as reçu : ${npc.itemName} !`;
+            }
+        } else {
+            closeDialogue();
+            return;
+        }
+
+    } else if (npc.type === "battle") {
+
+        if (textEl) {
+            textEl.textContent =
+                "Les combats de dresseurs arriveront dans une prochaine mise à jour !";
+        }
+
+    } else {
+        closeDialogue();
+        return;
+    }
+
+    if (nextButton) {
+        nextButton.textContent = "Fermer";
+        nextButton.removeEventListener("click", advanceDialogue);
+        nextButton.addEventListener("click", closeDialogue);
+    }
+}
+
+function closeDialogue() {
+
+    dialogueOpen = false;
+    currentDialogueNPC = null;
+    currentDialogueLineIndex = 0;
+
+    const dialogueWindow = document.getElementById("dialogueWindow");
+
+    if (dialogueWindow) {
+        dialogueWindow.remove();
     }
 }
 
@@ -922,7 +1157,7 @@ function stepToward(current, target, speed) {
 
 function updatePlayer() {
 
-    if (encounterOpen) return;
+    if (encounterOpen || dialogueOpen) return;
 
     // =========================
     // JOUEUR EN DÉPLACEMENT
@@ -1623,6 +1858,30 @@ function drawPlayer(screenX, screenY) {
     ctx.fill();
 }
 
+function drawNPC(screenX, screenY, npc) {
+    // Ombre
+    ctx.fillStyle = "rgba(0, 0, 0, 0.3)";
+    ctx.beginPath();
+    ctx.ellipse(screenX + TILE_SIZE / 2, screenY + TILE_SIZE - 4, 10, 4, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Corps
+    ctx.fillStyle = npc.color;
+    ctx.fillRect(screenX + 8, screenY + 14, TILE_SIZE - 16, 14);
+
+    // Tête
+    ctx.fillStyle = "#f2c48d";
+    ctx.beginPath();
+    ctx.arc(screenX + TILE_SIZE / 2, screenY + 10, 8, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Icône d'interaction
+    ctx.font = "14px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText(npc.icon, screenX + TILE_SIZE / 2, screenY - 4);
+    ctx.textAlign = "left";
+}
+
 let lastZone = null;
 
 function updateZoneLabel() {
@@ -1747,6 +2006,16 @@ function render() {
         5 * TILE_SIZE - cameraX,
         1 * TILE_SIZE - cameraY
     );
+
+
+    // PNJ
+    NPCS.forEach(npc => {
+        drawNPC(
+            npc.tileX * TILE_SIZE - cameraX,
+            npc.tileY * TILE_SIZE - cameraY,
+            npc
+        );
+    });
 
 
     // Joueur
