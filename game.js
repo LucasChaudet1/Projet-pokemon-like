@@ -170,7 +170,102 @@ const NPCS = [
         icon: "⚔️",
         lines: [
             "Une créature contre une créature, ça te dit ?"
-        ]
+        ],
+        defeatedLine: "Tu es plus fort que moi, bravo !",
+        team: [
+            { speciesId: 16, level: 6 }
+        ],
+        reward: 30
+    },
+    {
+        id: "fisher",
+        name: "Pêcheur Yann",
+        tileX: 5,
+        tileY: 12,
+        color: "#1f6fa8",
+        type: "battle",
+        icon: "🎣",
+        lines: [
+            "L'eau n'a aucun secret pour moi. Un combat ?"
+        ],
+        defeatedLine: "Bien joué, tu nages... euh, tu combats bien !",
+        team: [
+            { speciesId: 20, level: 8 },
+            { speciesId: 28, level: 9 }
+        ],
+        reward: 60
+    },
+    {
+        id: "hiker_forest",
+        name: "Randonneuse Clara",
+        tileX: 20,
+        tileY: 11,
+        color: "#3f8f3a",
+        type: "battle",
+        icon: "🌲",
+        lines: [
+            "La forêt regorge de créatures Plante. Prouve ta valeur !"
+        ],
+        defeatedLine: "Impressionnant, tu connais bien la forêt !",
+        team: [
+            { speciesId: 10, level: 9 },
+            { speciesId: 19, level: 10 }
+        ],
+        reward: 70
+    },
+    {
+        id: "adventurer_desert",
+        name: "Aventurier Marco",
+        tileX: 22,
+        tileY: 12,
+        color: "#c99a4a",
+        type: "battle",
+        icon: "🏜️",
+        lines: [
+            "Le désert forge les dresseurs les plus endurants."
+        ],
+        defeatedLine: "Tu as la trempe d'un vrai dresseur du désert !",
+        team: [
+            { speciesId: 21, level: 10 },
+            { speciesId: 24, level: 11 }
+        ],
+        reward: 80
+    },
+    {
+        id: "volcano_trainer",
+        name: "Pyromane Igor",
+        tileX: 35,
+        tileY: 11,
+        color: "#c0392b",
+        type: "battle",
+        icon: "🌋",
+        lines: [
+            "Sens la chaleur de mes créatures !"
+        ],
+        defeatedLine: "Mes flammes n'ont pas suffi... bien joué !",
+        team: [
+            { speciesId: 1, level: 12 },
+            { speciesId: 2, level: 14 }
+        ],
+        reward: 100
+    },
+    {
+        id: "arctic_trainer",
+        name: "Exploratrice Nao",
+        tileX: 35,
+        tileY: 12,
+        color: "#4a90c9",
+        type: "battle",
+        icon: "❄️",
+        lines: [
+            "Seuls les plus forts survivent ici. Montre-moi ta force !"
+        ],
+        defeatedLine: "Tu as bravé le froid et gagné, respect !",
+        team: [
+            { speciesId: 8, level: 14 },
+            { speciesId: 28, level: 15 }
+        ],
+        reward: 100
     }
 ];
 
@@ -180,6 +275,7 @@ let currentPlayer = {
     storage: [],
     inventory: [],
     npcGifts: [],
+    defeatedTrainers: [],
     activeCreature: 0,
     position: null,
     pokedex: { seen: [], caught: [] },
@@ -649,6 +745,10 @@ function loadGame() {
 
     if (!Array.isArray(currentPlayer.npcGifts)) {
         currentPlayer.npcGifts = [];
+    }
+
+    if (!Array.isArray(currentPlayer.defeatedTrainers)) {
+        currentPlayer.defeatedTrainers = [];
     }
 
 
@@ -1251,6 +1351,11 @@ let battlePlayerCreature = null;
 let battleWildCreature = null;
 let battleEnded = false;
 
+// Combat de dresseur : dresseur affronté, son équipe complète et l'index du combattant actuel
+let battleTrainer = null;
+let battleTrainerTeam = [];
+let battleTrainerIndex = 0;
+
 const CENTER_COLS = 20;
 const CENTER_ROWS = 15;
 
@@ -1626,9 +1731,30 @@ function resolveDialogueOutcome(npc) {
 
     } else if (npc.type === "battle") {
 
-        if (textEl) {
-            textEl.textContent =
-                "Les combats de dresseurs arriveront dans une prochaine mise à jour !";
+        if (currentPlayer.defeatedTrainers.includes(npc.id)) {
+
+            if (textEl) {
+                textEl.textContent =
+                    npc.defeatedLine || "Tu m'as déjà battu, reviens t'entraîner !";
+            }
+
+        } else {
+
+            const activeCreature = currentPlayer.team[currentPlayer.activeCreature];
+
+            if (!activeCreature || activeCreature.hp <= 0) {
+
+                if (textEl) {
+                    textEl.textContent =
+                        "Ta créature est K.O. ! Soigne-la au Centre Fakemon avant de m'affronter.";
+                }
+
+            } else {
+
+                closeDialogue();
+                startTrainerBattle(npc);
+                return;
+            }
         }
 
     } else if (npc.type === "shop") {
@@ -1919,15 +2045,46 @@ function applyAttack(attacker, defender, move) {
     addBattleLog(`${attacker.name} utilise ${moveName} et inflige ${damage} dégâts à ${defender.name} !`);
 }
 
-function startBattle(wild) {
+function buildTrainerTeam(npc) {
+    return npc.team.map(entry => {
+        const species = getSpeciesInfo(entry.speciesId);
+        return createCreature(species.id, species.name, species.type, entry.level);
+    });
+}
+
+function startTrainerBattle(npc) {
+
+    const activeCreature = currentPlayer.team[currentPlayer.activeCreature];
+
+    if (!activeCreature || activeCreature.hp <= 0) {
+        alert("Ta créature est K.O. ! Soigne-la au Centre Fakemon avant d'affronter un dresseur.");
+        return;
+    }
+
+    battleTrainerTeam = buildTrainerTeam(npc);
+    battleTrainerIndex = 0;
+
+    startBattle(battleTrainerTeam[0], npc);
+}
+
+function startBattle(wild, trainerNpc = null) {
 
     battleOpen = true;
     battleEnded = false;
     battlePlayerCreature = currentPlayer.team[currentPlayer.activeCreature];
     battleWildCreature = wild;
+    battleTrainer = trainerNpc;
     battleLog = [];
 
-    addBattleLog(`Un ${wild.name} sauvage veut se battre !`);
+    if (battleTrainer) {
+        addBattleLog(`${battleTrainer.name} t'envoie ${wild.name} !`);
+    } else {
+        addBattleLog(`Un ${wild.name} sauvage veut se battre !`);
+    }
+
+    const battleTitle = battleTrainer
+        ? `⚔️ Combat contre ${battleTrainer.name}`
+        : "⚔️ Combat sauvage";
 
     const battleWindow = document.createElement("div");
 
@@ -1936,7 +2093,7 @@ function startBattle(wild) {
     battleWindow.innerHTML = `
         <div class="battle-box">
 
-            <h2 class="battle-title">⚔️ Combat sauvage</h2>
+            <h2 class="battle-title">${battleTitle}</h2>
 
             <div class="battle-combatants">
 
@@ -1983,28 +2140,39 @@ function renderBattleActions() {
         item => item.id === "capture_sphere"
     ).length;
 
+    // On ne peut ni capturer ni fuir un combat de dresseur
+    const captureButton = battleTrainer
+        ? ""
+        : `<button id="battleCaptureButton">🔴 Capturer (${sphereCount})</button>`;
+
+    const fleeButton = battleTrainer
+        ? ""
+        : `<button id="battleFleeButton">🏃 Fuir</button>`;
+
     actionsEl.innerHTML = `
         <button id="battleAttackButton">⚔️ Attaquer</button>
-        <button id="battleCaptureButton">🔴 Capturer (${sphereCount})</button>
+        ${captureButton}
         <button id="battleHealButton">💊 Soigner</button>
-        <button id="battleFleeButton">🏃 Fuir</button>
+        ${fleeButton}
     `;
 
     document
         .getElementById("battleAttackButton")
         .addEventListener("click", openMoveMenu);
 
-    document
-        .getElementById("battleCaptureButton")
-        .addEventListener("click", playerCapture);
+    const captureBtn = document.getElementById("battleCaptureButton");
+    if (captureBtn) {
+        captureBtn.addEventListener("click", playerCapture);
+    }
 
     document
         .getElementById("battleHealButton")
         .addEventListener("click", usePotionInBattle);
 
-    document
-        .getElementById("battleFleeButton")
-        .addEventListener("click", playerFlee);
+    const fleeBtn = document.getElementById("battleFleeButton");
+    if (fleeBtn) {
+        fleeBtn.addEventListener("click", playerFlee);
+    }
 }
 
 function openMoveMenu() {
@@ -2139,7 +2307,7 @@ function wildAttack() {
     applyAttack(wild, player, pickRandomMove(wild));
 
     if (player.hp <= 0) {
-        finishBattleLose();
+        handlePlayerFaint();
         return;
     }
 
@@ -2171,7 +2339,7 @@ function playerAttack(move) {
         applyAttack(wild, player, wildMove);
 
         if (player.hp <= 0) {
-            finishBattleLose();
+            handlePlayerFaint();
             return;
         }
 
@@ -2180,7 +2348,7 @@ function playerAttack(move) {
         applyAttack(wild, player, wildMove);
 
         if (player.hp <= 0) {
-            finishBattleLose();
+            handlePlayerFaint();
             return;
         }
 
@@ -2229,7 +2397,7 @@ function playerCapture() {
     saveGame();
 
     if (battlePlayerCreature.hp <= 0) {
-        finishBattleLose();
+        handlePlayerFaint();
         return;
     }
 
@@ -2247,16 +2415,15 @@ function playerFlee() {
 
 function finishBattleWin() {
 
-    battleEnded = true;
-
     const winnerName = battlePlayerCreature.name;
-    const xpGain = battleWildCreature.level * 10;
-    const moneyGain = battleWildCreature.level * 5;
+    const defeatedCreature = battleWildCreature;
+    const xpGain = defeatedCreature.level * 10;
+    const moneyGain = defeatedCreature.level * 5;
     const levelUpMessages = gainXP(battlePlayerCreature, xpGain);
 
     currentPlayer.money += moneyGain;
 
-    addBattleLog(`${battleWildCreature.name} est K.O. !`);
+    addBattleLog(`${defeatedCreature.name} est K.O. !`);
     addBattleLog(`${winnerName} gagne ${xpGain} points d'expérience !`);
     addBattleLog(`Tu gagnes ${moneyGain} 💰 !`);
 
@@ -2264,20 +2431,120 @@ function finishBattleWin() {
 
     updateTeamDisplay();
     updateMoneyDisplay();
+
+    // Le dresseur a encore des créatures : il envoie la suivante, le combat continue
+    if (battleTrainer && battleTrainerIndex < battleTrainerTeam.length - 1) {
+
+        battleTrainerIndex++;
+        battleWildCreature = battleTrainerTeam[battleTrainerIndex];
+
+        addBattleLog(`${battleTrainer.name} envoie ${battleWildCreature.name} !`);
+
+        saveGame();
+
+        renderBattle();
+        renderBattleActions();
+
+        return;
+    }
+
+    battleEnded = true;
+
+    if (battleTrainer) {
+
+        const trainerReward = battleTrainer.reward || 0;
+
+        currentPlayer.money += trainerReward;
+
+        if (!currentPlayer.defeatedTrainers.includes(battleTrainer.id)) {
+            currentPlayer.defeatedTrainers.push(battleTrainer.id);
+        }
+
+        addBattleLog(`Tu as vaincu ${battleTrainer.name} !`);
+        addBattleLog(`Récompense du dresseur : ${trainerReward} 💰 !`);
+
+        updateMoneyDisplay();
+    }
+
     saveGame();
 
     renderBattle(true);
 }
 
-function finishBattleLose() {
+// Appelée quand la créature active tombe à 0 PV : propose de changer de
+// créature s'il en reste une valide dans l'équipe, sinon le combat est perdu.
+function handlePlayerFaint() {
 
-    battleEnded = true;
     battlePlayerCreature.fainted = true;
 
     addBattleLog(`${battlePlayerCreature.name} est K.O. !`);
-    addBattleLog("Rends-toi au Centre Fakemon pour soigner ton équipe.");
 
     updateTeamDisplay();
+    saveGame();
+
+    const aliveIndexes = currentPlayer.team
+        .map((creature, index) => index)
+        .filter(index => currentPlayer.team[index].hp > 0);
+
+    if (aliveIndexes.length === 0) {
+        finishBattleLose();
+        return;
+    }
+
+    renderBattle();
+    renderSwitchMenu(aliveIndexes);
+}
+
+function renderSwitchMenu(aliveIndexes) {
+
+    const actionsEl = document.getElementById("battleActions");
+
+    if (!actionsEl) return;
+
+    actionsEl.innerHTML =
+        `<p class="battle-switch-title">Choisis ta prochaine créature :</p>` +
+        aliveIndexes.map(index => {
+            const creature = currentPlayer.team[index];
+            return `
+                <button class="battle-switch-button" data-team-index="${index}">
+                    ${creature.name} (Nv. ${creature.level}) — ${creature.hp}/${creature.maxHp} PV
+                </button>
+            `;
+        }).join("");
+
+    actionsEl.querySelectorAll(".battle-switch-button").forEach(button => {
+        const index = Number(button.dataset.teamIndex);
+        button.addEventListener("click", () => switchToCreature(index));
+    });
+}
+
+function switchToCreature(index) {
+
+    if (!battleOpen || battleEnded) return;
+
+    const creature = currentPlayer.team[index];
+
+    if (!creature || creature.hp <= 0) return;
+
+    currentPlayer.activeCreature = index;
+    battlePlayerCreature = creature;
+
+    addBattleLog(`Tu envoies ${creature.name} au combat !`);
+
+    updateTeamDisplay();
+    saveGame();
+
+    renderBattle();
+    renderBattleActions();
+}
+
+function finishBattleLose() {
+
+    battleEnded = true;
+
+    addBattleLog("Toute ton équipe est K.O. !");
+    addBattleLog("Rends-toi au Centre Fakemon pour soigner ton équipe.");
+
     saveGame();
 
     renderBattle(true);
@@ -2322,6 +2589,9 @@ function closeBattle() {
     battleEnded = false;
     battlePlayerCreature = null;
     battleWildCreature = null;
+    battleTrainer = null;
+    battleTrainerTeam = [];
+    battleTrainerIndex = 0;
     battleLog = [];
 
     const battleWindow = document.getElementById("battleWindow");

@@ -1046,6 +1046,12 @@ body {
     background: #3b75c9;
 }
 
+.battle-switch-title {
+    margin: 0 0 4px;
+    font-weight: bold;
+    text-align: center;
+}
+
 #battleFleeButton,
 #battleMoveBackButton {
     background: #6b7280;
