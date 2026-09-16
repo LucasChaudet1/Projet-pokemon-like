@@ -696,6 +696,15 @@ const TILES = {
         decoColor: "#8a6d3a"
     },
 
+    // Buisson dense : cache des créatures sauvages (comme les hautes herbes)
+    REED_THICKET: {
+        color: "#e8d38a",
+        walkable: true,
+        deco: "thicket",
+        decoColor: "#2f6b4a",
+        encounterZone: true
+    },
+
     // Zone Volcanique
     ASH: { color: "#5c5248", walkable: true },
 
@@ -718,6 +727,22 @@ const TILES = {
         decoColor: "#2e2a24"
     },
 
+    ASH_THICKET: {
+        color: "#5c5248",
+        walkable: true,
+        deco: "thicket",
+        decoColor: "#b23a1a",
+        encounterZone: true
+    },
+
+    CACTUS_THICKET: {
+        color: "#e0a458",
+        walkable: true,
+        deco: "thicket",
+        decoColor: "#3f7d3f",
+        encounterZone: true
+    },
+
     // Zone Arctique
     SNOW: { color: "#eef6fb", walkable: true },
 
@@ -738,6 +763,14 @@ const TILES = {
         walkable: true,
         deco: "bush",
         decoColor: "#c8dced"
+    },
+
+    SNOW_THICKET: {
+        color: "#eef6fb",
+        walkable: true,
+        deco: "thicket",
+        decoColor: "#6a9fc0",
+        encounterZone: true
     },
 
     // Centre Fakemon
@@ -899,6 +932,45 @@ function placeArcticZone(grid) {
     }
 }
 
+function placeEncounterThickets(grid) {
+
+    // Lac Azur : roseaux sur la rive
+    for (let y = 13; y < 18; y++) {
+        for (let x = 1; x < 6; x++) {
+            if (grid[y][x] === "SAND") {
+                grid[y][x] = "REED_THICKET";
+            }
+        }
+    }
+
+    // Route Sablonneuse : buissons de cactus
+    for (let y = 17; y < 22; y++) {
+        for (let x = 20; x < 25; x++) {
+            if (grid[y][x] === "DESERT") {
+                grid[y][x] = "CACTUS_THICKET";
+            }
+        }
+    }
+
+    // Zone Volcanique : broussailles calcinées
+    for (let y = 2; y < 7; y++) {
+        for (let x = 36; x < 41; x++) {
+            if (grid[y][x] === "ASH") {
+                grid[y][x] = "ASH_THICKET";
+            }
+        }
+    }
+
+    // Zone Arctique : buissons givrés denses
+    for (let y = 17; y < 22; y++) {
+        for (let x = 36; x < 41; x++) {
+            if (grid[y][x] === "SNOW") {
+                grid[y][x] = "SNOW_THICKET";
+            }
+        }
+    }
+}
+
 function placeBushes(grid) {
 
     // Bourg Palette : buissons dans l'herbe autour du village
@@ -985,6 +1057,7 @@ function buildMap() {
     placeDesert(grid);
     placeVolcanicZone(grid);
     placeArcticZone(grid);
+    placeEncounterThickets(grid);
     placeBushes(grid);
 
     return grid;
@@ -2634,6 +2707,25 @@ function drawTile(x, y, screenX, screenY) {
             ctx.arc(screenX + bx, screenY + by, r, 0, Math.PI * 2);
             ctx.fill();
         });
+    } else if (tile.deco === "thicket") {
+        ctx.fillStyle = tile.decoColor || "#1f5c1f";
+        const clumps = [
+            [TILE_SIZE / 2 - 10, TILE_SIZE / 2 + 4, 9],
+            [TILE_SIZE / 2 + 9, TILE_SIZE / 2 + 4, 9],
+            [TILE_SIZE / 2, TILE_SIZE / 2 - 2, 10],
+            [TILE_SIZE / 2 - 3, TILE_SIZE / 2 + 9, 7],
+            [TILE_SIZE / 2 + 5, TILE_SIZE / 2 + 9, 7]
+        ];
+        clumps.forEach(([bx, by, r]) => {
+            ctx.beginPath();
+            ctx.arc(screenX + bx, screenY + by, r, 0, Math.PI * 2);
+            ctx.fill();
+        });
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(screenX + TILE_SIZE / 2, screenY + TILE_SIZE / 2 - 2, 10, 0, Math.PI * 2);
+        ctx.stroke();
     } else if (tile.deco === "lava") {
         ctx.fillStyle = "#ffcf4d";
         ctx.beginPath();
