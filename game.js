@@ -209,28 +209,24 @@ function saveGame() {
 }
 
 function loadGame() {
+
     const saved = localStorage.getItem("playerData");
 
     if (!saved) return;
 
     currentPlayer = JSON.parse(saved);
 
-    if (typeof currentPlayer.activeCreature !== "number") {
-        currentPlayer.activeCreature = 0;
-    }
 
-    if (
-        currentPlayer.activeCreature < 0 ||
-        currentPlayer.activeCreature >= currentPlayer.team.length
-    ) {
-        currentPlayer.activeCreature = 0;
-    }
+    // =========================
+    // ANCIENNES SAUVEGARDES
+    // =========================
 
-    // Sécurité pour les anciennes sauvegardes
     if (!currentPlayer.team) {
+
         currentPlayer.team = [];
 
         if (currentPlayer.creature) {
+
             currentPlayer.team.push(
                 createCreature(
                     currentPlayer.creature.id,
@@ -243,23 +239,70 @@ function loadGame() {
         delete currentPlayer.creature;
     }
 
-    // Afficher le pseudo
-    playerName.textContent = "👤 " + currentPlayer.pseudo;
 
-    // Afficher l'équipe
+    // =========================
+    // CRÉATURE ACTIVE
+    // =========================
+
+    if (
+        typeof currentPlayer.activeCreature !== "number" ||
+        currentPlayer.activeCreature < 0 ||
+        currentPlayer.activeCreature >= currentPlayer.team.length
+    ) {
+        currentPlayer.activeCreature = 0;
+    }
+
+
+    // =========================
+    // CARTE ACTUELLE
+    // =========================
+
+    if (
+        currentPlayer.currentMap === "center" ||
+        currentPlayer.currentMap === "world"
+    ) {
+        currentMap = currentPlayer.currentMap;
+    } else {
+        currentMap = "world";
+    }
+
+
+    // =========================
+    // AFFICHAGE
+    // =========================
+
+    playerName.textContent =
+        "👤 " + currentPlayer.pseudo;
+
     updateTeamDisplay();
 
-    // Afficher directement le jeu
     startScreen.classList.add("hidden");
     creatureScreen.classList.add("hidden");
     gameScreen.classList.remove("hidden");
 
-    // Restaurer la position
+
+    // =========================
+    // POSITION
+    // =========================
+
     if (currentPlayer.position) {
+
         setPlayerTile(
             currentPlayer.position.x,
             currentPlayer.position.y
         );
+    }
+
+
+    // =========================
+    // NOM DE LA ZONE
+    // =========================
+
+    if (currentMap === "center") {
+        zoneLabel.textContent = "🏥 Centre Fakemon";
+    } else {
+        zoneLabel.textContent =
+            getZoneName(player.tileX, player.tileY);
     }
 }
 
@@ -275,11 +318,43 @@ const TILES = {
     PATH: { color: "#d8c48a", walkable: true },
     SAND: { color: "#e8d38a", walkable: true },
     DESERT: { color: "#e0a458", walkable: true },
+
     WATER: { color: "#3a8ee6", walkable: false },
-    TREE: { color: "#2f6b30", walkable: false, deco: "tree" },
-    ROCK: { color: "#e0a458", walkable: false, deco: "rock" },
-    HOUSE: { color: "#5fb84c", walkable: false, deco: "house" },
-    FLOWER: { color: "#5fb84c", walkable: true, deco: "flower" },
+
+    TREE: {
+        color: "#2f6b30",
+        walkable: false,
+        deco: "tree"
+    },
+
+    ROCK: {
+        color: "#e0a458",
+        walkable: false,
+        deco: "rock"
+    },
+
+    HOUSE: {
+        color: "#5fb84c",
+        walkable: false,
+        deco: "house"
+    },
+
+    FLOWER: {
+        color: "#5fb84c",
+        walkable: true,
+        deco: "flower"
+    },
+
+    // Centre Fakemon
+    CENTER_WALL: {
+        color: "#ffffff",
+        walkable: false
+    },
+
+    CENTER_DOOR: {
+        color: "#ffffff",
+        walkable: true
+    }
 };
 
 function getBaseTile(x, y) {
@@ -292,14 +367,60 @@ function getBaseTile(x, y) {
 }
 
 function placeVillage(grid) {
-    const houses = [[2, 2], [5, 2], [9, 2], [12, 2], [2, 8], [12, 8]];
+
+    // Maisons normales
+    const houses = [
+        [2, 2],
+        [11, 2],
+        [2, 8],
+        [12, 8]
+    ];
+
     houses.forEach(([x, y]) => {
         grid[y][x] = "HOUSE";
     });
 
+
+    // =========================
+    // CENTRE FAKEMON
+    // =========================
+
+    // Position du centre
+    // largeur : 5 cases
+    // hauteur : 4 cases
+
+    const centerX = 5;
+    const centerY = 1;
+
+    for (let y = centerY; y < centerY + 4; y++) {
+        for (let x = centerX; x < centerX + 5; x++) {
+
+            // Porte au milieu
+            if (x === centerX + 2 && y === centerY + 3) {
+                grid[y][x] = "CENTER_DOOR";
+            } else {
+                grid[y][x] = "CENTER_WALL";
+            }
+        }
+    }
+
+
+    // Fleurs autour du village
     for (let y = 0; y < 11; y++) {
         for (let x = 0; x < 14; x++) {
-            if (grid[y][x] === "GRASS" && (x * 3 + y * 5) % 17 === 0) {
+
+            // Ne pas mettre de fleurs dans le centre
+            const insideCenter =
+                x >= centerX &&
+                x < centerX + 5 &&
+                y >= centerY &&
+                y < centerY + 4;
+
+            if (
+                !insideCenter &&
+                grid[y][x] === "GRASS" &&
+                (x * 3 + y * 5) % 17 === 0
+            ) {
                 grid[y][x] = "FLOWER";
             }
         }
@@ -392,6 +513,83 @@ let player = {
     speed: 3,
 };
 
+let currentMap = "world";
+
+const CENTER_COLS = 20;
+const CENTER_ROWS = 15;
+
+let centerMap = [];
+
+function buildCenterMap() {
+
+    const grid = [];
+
+    for (let y = 0; y < CENTER_ROWS; y++) {
+
+        const row = [];
+
+        for (let x = 0; x < CENTER_COLS; x++) {
+
+            // Murs
+            if (
+                x === 0 ||
+                x === CENTER_COLS - 1 ||
+                y === 0 ||
+                y === CENTER_ROWS - 1
+            ) {
+                row.push("CENTER_WALL");
+            } else {
+                row.push("PATH");
+            }
+        }
+
+        grid.push(row);
+    }
+
+    // Porte de sortie
+    grid[CENTER_ROWS - 1][Math.floor(CENTER_COLS / 2)] = "CENTER_DOOR";
+
+    return grid;
+}
+
+centerMap = buildCenterMap();
+
+function enterCenter() {
+
+    currentMap = "center";
+
+    currentPlayer.currentMap = "center";
+
+    player.tileX = Math.floor(CENTER_COLS / 2);
+    player.tileY = CENTER_ROWS - 2;
+
+    player.pixelX = player.tileX * TILE_SIZE;
+    player.pixelY = player.tileY * TILE_SIZE;
+
+    player.targetPixelX = player.pixelX;
+    player.targetPixelY = player.pixelY;
+
+    player.moving = false;
+
+    zoneLabel.textContent = "🏥 Centre Fakemon";
+
+    saveGame();
+}
+
+function exitCenter() {
+
+    currentMap = "world";
+
+    currentPlayer.currentMap = "world";
+
+    // Position devant le Centre
+    setPlayerTile(7, 5);
+
+    zoneLabel.textContent = "🏘️ Village de Départ";
+
+    saveGame();
+}
+
 function setPlayerTile(x, y) {
     player.tileX = x;
     player.tileY = y;
@@ -421,20 +619,99 @@ document.addEventListener("keyup", (e) => {
 });
 
 function tryMove(dx, dy, direction) {
+
     player.direction = direction;
 
     const newX = player.tileX + dx;
     const newY = player.tileY + dy;
-    if (newX < 0 || newX >= MAP_COLS || newY < 0 || newY >= MAP_ROWS) return;
 
-    const tile = TILES[mapGrid[newY][newX]];
-    if (!tile.walkable) return;
+    // =========================
+    // MONDE EXTÉRIEUR
+    // =========================
 
-    player.tileX = newX;
-    player.tileY = newY;
-    player.targetPixelX = newX * TILE_SIZE;
-    player.targetPixelY = newY * TILE_SIZE;
-    player.moving = true;
+    if (currentMap === "world") {
+
+        if (
+            newX < 0 ||
+            newX >= MAP_COLS ||
+            newY < 0 ||
+            newY >= MAP_ROWS
+        ) {
+            return;
+        }
+
+        const tile = TILES[mapGrid[newY][newX]];
+
+        if (!tile.walkable) {
+            return;
+        }
+
+        player.tileX = newX;
+        player.tileY = newY;
+
+        player.targetPixelX = newX * TILE_SIZE;
+        player.targetPixelY = newY * TILE_SIZE;
+
+        player.moving = true;
+
+        return;
+    }
+
+
+    // =========================
+    // INTÉRIEUR DU CENTRE
+    // =========================
+
+    if (currentMap === "center") {
+
+        if (
+            newX < 0 ||
+            newX >= CENTER_COLS ||
+            newY < 0 ||
+            newY >= CENTER_ROWS
+        ) {
+            return;
+        }
+
+        const tile = TILES[centerMap[newY][newX]];
+
+        if (!tile.walkable) {
+            return;
+        }
+
+        player.tileX = newX;
+        player.tileY = newY;
+
+        player.targetPixelX = newX * TILE_SIZE;
+        player.targetPixelY = newY * TILE_SIZE;
+
+        player.moving = true;
+    }
+}
+
+function checkBuildingInteraction() {
+
+    if (player.moving) return;
+
+
+    // Entrée dans le Centre
+    if (
+        currentMap === "world" &&
+        player.tileX === 7 &&
+        player.tileY === 4
+    ) {
+        enterCenter();
+        return;
+    }
+
+
+    // Sortie du Centre
+    if (
+        currentMap === "center" &&
+        player.tileY === CENTER_ROWS - 1
+    ) {
+        exitCenter();
+    }
 }
 
 function stepToward(current, target, speed) {
@@ -444,33 +721,437 @@ function stepToward(current, target, speed) {
 }
 
 function updatePlayer() {
-    if (player.moving) {
-        player.pixelX = stepToward(player.pixelX, player.targetPixelX, player.speed);
-        player.pixelY = stepToward(player.pixelY, player.targetPixelY, player.speed);
 
-        if (player.pixelX === player.targetPixelX && player.pixelY === player.targetPixelY) {
+    // =========================
+    // JOUEUR EN DÉPLACEMENT
+    // =========================
+
+    if (player.moving) {
+
+        player.pixelX = stepToward(
+            player.pixelX,
+            player.targetPixelX,
+            player.speed
+        );
+
+        player.pixelY = stepToward(
+            player.pixelY,
+            player.targetPixelY,
+            player.speed
+        );
+
+
+        // Le déplacement est terminé
+        if (
+            player.pixelX === player.targetPixelX &&
+            player.pixelY === player.targetPixelY
+        ) {
+
             player.moving = false;
-            currentPlayer.position = { x: player.tileX, y: player.tileY };
+
+            // Vérifier les bâtiments
+            checkBuildingInteraction();
+
+            // Sauvegarder la position
+            currentPlayer.position = {
+                x: player.tileX,
+                y: player.tileY
+            };
+
+            currentPlayer.currentMap = currentMap;
+
             saveGame();
         }
+
+        // Ne pas lancer un nouveau déplacement
+        // pendant l'animation actuelle
         return;
     }
 
-    if (pressedKeys.has("ArrowUp") || pressedKeys.has("z") || pressedKeys.has("w")) {
+
+    // =========================
+    // DÉPLACEMENT DU JOUEUR
+    // =========================
+
+    if (
+        pressedKeys.has("ArrowUp") ||
+        pressedKeys.has("z") ||
+        pressedKeys.has("w")
+    ) {
+
         tryMove(0, -1, "up");
-    } else if (pressedKeys.has("ArrowDown") || pressedKeys.has("s")) {
+
+    } else if (
+        pressedKeys.has("ArrowDown") ||
+        pressedKeys.has("s")
+    ) {
+
         tryMove(0, 1, "down");
-    } else if (pressedKeys.has("ArrowLeft") || pressedKeys.has("q") || pressedKeys.has("a")) {
+
+    } else if (
+        pressedKeys.has("ArrowLeft") ||
+        pressedKeys.has("q") ||
+        pressedKeys.has("a")
+    ) {
+
         tryMove(-1, 0, "left");
-    } else if (pressedKeys.has("ArrowRight") || pressedKeys.has("d")) {
+
+    } else if (
+        pressedKeys.has("ArrowRight") ||
+        pressedKeys.has("d")
+    ) {
+
         tryMove(1, 0, "right");
     }
+}
+
+function drawCenterInterior() {
+
+    // Fond
+    ctx.fillStyle = "#e9eef5";
+    ctx.fillRect(
+        0,
+        0,
+        canvas.width,
+        canvas.height
+    );
+
+    // Sol en carreaux
+    for (let y = 1; y < CENTER_ROWS - 1; y++) {
+
+        for (let x = 1; x < CENTER_COLS - 1; x++) {
+
+            ctx.fillStyle =
+                (x + y) % 2 === 0
+                    ? "#f4f7fb"
+                    : "#e2e8f0";
+
+            ctx.fillRect(
+                x * TILE_SIZE,
+                y * TILE_SIZE,
+                TILE_SIZE,
+                TILE_SIZE
+            );
+        }
+    }
+
+
+    // Mur du haut
+    ctx.fillStyle = "#4b8ee8";
+
+    ctx.fillRect(
+        0,
+        0,
+        CENTER_COLS * TILE_SIZE,
+        TILE_SIZE
+    );
+
+
+    // Comptoir
+    ctx.fillStyle = "#e85b4f";
+
+    ctx.fillRect(
+        7 * TILE_SIZE,
+        4 * TILE_SIZE,
+        6 * TILE_SIZE,
+        TILE_SIZE * 2
+    );
+
+
+    // Comptoir blanc
+    ctx.fillStyle = "#ffffff";
+
+    ctx.fillRect(
+        7 * TILE_SIZE,
+        4 * TILE_SIZE,
+        6 * TILE_SIZE,
+        8
+    );
+
+
+    // Infirmière
+    ctx.fillStyle = "#ffb6c1";
+
+    ctx.beginPath();
+
+    ctx.arc(
+        10 * TILE_SIZE,
+        3 * TILE_SIZE,
+        12,
+        0,
+        Math.PI * 2
+    );
+
+    ctx.fill();
+
+
+    // Plantes
+    drawCenterPlant(
+        3 * TILE_SIZE,
+        4 * TILE_SIZE
+    );
+
+    drawCenterPlant(
+        16 * TILE_SIZE,
+        4 * TILE_SIZE
+    );
+
+
+    // Zone de soin
+    ctx.fillStyle = "#9dbcf0";
+
+    ctx.beginPath();
+
+    ctx.arc(
+        10 * TILE_SIZE,
+        9 * TILE_SIZE,
+        45,
+        0,
+        Math.PI * 2
+    );
+
+    ctx.fill();
+
+    ctx.fillStyle = "#ffffff";
+
+    ctx.beginPath();
+
+    ctx.arc(
+        10 * TILE_SIZE,
+        9 * TILE_SIZE,
+        30,
+        0,
+        Math.PI * 2
+    );
+
+    ctx.fill();
+
+
+    // Texte
+    ctx.fillStyle = "#333";
+    ctx.font = "bold 18px Arial";
+    ctx.textAlign = "center";
+
+    ctx.fillText(
+        "CENTRE FAKEMON",
+        canvas.width / 2,
+        30
+    );
+
+    ctx.textAlign = "left";
 }
 
 // ===================== RENDU =====================
 
 function clamp(v, min, max) {
     return Math.max(min, Math.min(max, v));
+}
+
+function drawCenterBuilding(screenX, screenY) {
+
+    const width = TILE_SIZE * 5;
+    const height = TILE_SIZE * 4;
+
+    // =========================
+    // OMBRE
+    // =========================
+
+    ctx.fillStyle = "rgba(0, 0, 0, 0.25)";
+    ctx.fillRect(
+        screenX + 4,
+        screenY + 8,
+        width,
+        height
+    );
+
+
+    // =========================
+    // BÂTIMENT BLANC
+    // =========================
+
+    ctx.fillStyle = "#f5f5f5";
+
+    ctx.fillRect(
+        screenX,
+        screenY + 35,
+        width,
+        height - 35
+    );
+
+
+    // =========================
+    // CONTOUR BLEU
+    // =========================
+
+    ctx.strokeStyle = "#b8c9e8";
+    ctx.lineWidth = 4;
+
+    ctx.strokeRect(
+        screenX + 2,
+        screenY + 36,
+        width - 4,
+        height - 38
+    );
+
+
+    // =========================
+    // GRAND TOIT
+    // =========================
+
+    ctx.fillStyle = "#4b8ee8";
+
+    ctx.beginPath();
+
+    ctx.moveTo(screenX + 10, screenY + 36);
+    ctx.lineTo(screenX + 25, screenY + 5);
+    ctx.lineTo(screenX + width - 25, screenY + 5);
+    ctx.lineTo(screenX + width - 10, screenY + 36);
+
+    ctx.closePath();
+    ctx.fill();
+
+
+    // Bord du toit
+    ctx.strokeStyle = "#dce9ff";
+    ctx.lineWidth = 5;
+
+    ctx.stroke();
+
+
+    // =========================
+    // BANDE BLEUE
+    // =========================
+
+    ctx.fillStyle = "#3b75c9";
+
+    ctx.fillRect(
+        screenX + width / 2 - 42,
+        screenY + 28,
+        84,
+        28
+    );
+
+
+    // =========================
+    // SYMBOLE
+    // =========================
+
+    ctx.fillStyle = "#ef4444";
+
+    ctx.beginPath();
+    ctx.arc(
+        screenX + width / 2,
+        screenY + 42,
+        10,
+        0,
+        Math.PI * 2
+    );
+    ctx.fill();
+
+    ctx.fillStyle = "#ffffff";
+
+    ctx.beginPath();
+    ctx.arc(
+        screenX + width / 2,
+        screenY + 42,
+        6,
+        0,
+        Math.PI * 2
+    );
+    ctx.fill();
+
+
+    // =========================
+    // FENÊTRES
+    // =========================
+
+    ctx.fillStyle = "#59b9f2";
+
+    ctx.fillRect(
+        screenX + 14,
+        screenY + 55,
+        28,
+        24
+    );
+
+    ctx.fillRect(
+        screenX + width - 42,
+        screenY + 55,
+        28,
+        24
+    );
+
+
+    // Contour fenêtres
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 3;
+
+    ctx.strokeRect(
+        screenX + 14,
+        screenY + 55,
+        28,
+        24
+    );
+
+    ctx.strokeRect(
+        screenX + width - 42,
+        screenY + 55,
+        28,
+        24
+    );
+
+
+    // =========================
+    // ENTRÉE
+    // =========================
+
+    const doorX = screenX + width / 2 - 22;
+    const doorY = screenY + height - 58;
+
+    // Encadrement
+    ctx.fillStyle = "#4b8ee8";
+
+    ctx.fillRect(
+        doorX - 5,
+        doorY - 5,
+        54,
+        63
+    );
+
+    // Porte ouverte
+    ctx.fillStyle = "#263b5e";
+
+    ctx.fillRect(
+        doorX,
+        doorY,
+        44,
+        58
+    );
+
+    // Sol intérieur visible
+    ctx.fillStyle = "#d8e6f7";
+
+    ctx.fillRect(
+        doorX + 6,
+        doorY + 42,
+        32,
+        16
+    );
+
+
+    // =========================
+    // PETITS ARBRES
+    // =========================
+
+    drawCenterPlant(
+        screenX + 45,
+        screenY + height - 18
+    );
+
+    drawCenterPlant(
+        screenX + width - 45,
+        screenY + height - 18
+    );
 }
 
 function drawTile(x, y, screenX, screenY) {
@@ -516,6 +1197,20 @@ function drawTile(x, y, screenX, screenY) {
     }
 }
 
+function drawCenterPlant(x, y) {
+
+    // pot
+    ctx.fillStyle = "#b86b3c";
+    ctx.fillRect(x - 6, y, 12, 10);
+
+    // feuillage
+    ctx.fillStyle = "#299447";
+
+    ctx.beginPath();
+    ctx.arc(x, y - 7, 10, 0, Math.PI * 2);
+    ctx.fill();
+}
+
 function drawPlayer(screenX, screenY) {
     // Ombre
     ctx.fillStyle = "rgba(0, 0, 0, 0.3)";
@@ -554,31 +1249,135 @@ function drawPlayer(screenX, screenY) {
 let lastZone = null;
 
 function updateZoneLabel() {
-    const zone = getZoneName(player.tileX, player.tileY);
+
+    if (currentMap === "center") {
+
+        if (lastZone !== "🏥 Centre Fakemon") {
+            zoneLabel.textContent = "🏥 Centre Fakemon";
+            lastZone = "🏥 Centre Fakemon";
+        }
+
+        return;
+    }
+
+
+    const zone = getZoneName(
+        player.tileX,
+        player.tileY
+    );
+
     if (zone !== lastZone) {
+
         zoneLabel.textContent = zone;
+
         lastZone = zone;
     }
 }
 
 function render() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    const cameraX = clamp(player.pixelX + TILE_SIZE / 2 - canvas.width / 2, 0, MAP_COLS * TILE_SIZE - canvas.width);
-    const cameraY = clamp(player.pixelY + TILE_SIZE / 2 - canvas.height / 2, 0, MAP_ROWS * TILE_SIZE - canvas.height);
+    // =========================
+    // INTÉRIEUR DU CENTRE
+    // =========================
 
-    const startCol = Math.max(0, Math.floor(cameraX / TILE_SIZE));
-    const endCol = Math.min(MAP_COLS - 1, Math.ceil((cameraX + canvas.width) / TILE_SIZE));
-    const startRow = Math.max(0, Math.floor(cameraY / TILE_SIZE));
-    const endRow = Math.min(MAP_ROWS - 1, Math.ceil((cameraY + canvas.height) / TILE_SIZE));
+    if (currentMap === "center") {
 
+        ctx.clearRect(
+            0,
+            0,
+            canvas.width,
+            canvas.height
+        );
+
+        drawCenterInterior();
+
+        drawPlayer(
+            player.pixelX,
+            player.pixelY
+        );
+
+        return;
+    }
+
+
+    // =========================
+    // MONDE EXTÉRIEUR
+    // =========================
+
+    ctx.clearRect(
+        0,
+        0,
+        canvas.width,
+        canvas.height
+    );
+
+    const cameraX = clamp(
+        player.pixelX + TILE_SIZE / 2 - canvas.width / 2,
+        0,
+        MAP_COLS * TILE_SIZE - canvas.width
+    );
+
+    const cameraY = clamp(
+        player.pixelY + TILE_SIZE / 2 - canvas.height / 2,
+        0,
+        MAP_ROWS * TILE_SIZE - canvas.height
+    );
+
+
+    const startCol = Math.max(
+        0,
+        Math.floor(cameraX / TILE_SIZE)
+    );
+
+    const endCol = Math.min(
+        MAP_COLS - 1,
+        Math.ceil(
+            (cameraX + canvas.width) / TILE_SIZE
+        )
+    );
+
+
+    const startRow = Math.max(
+        0,
+        Math.floor(cameraY / TILE_SIZE)
+    );
+
+    const endRow = Math.min(
+        MAP_ROWS - 1,
+        Math.ceil(
+            (cameraY + canvas.height) / TILE_SIZE
+        )
+    );
+
+
+    // Dessiner la carte
     for (let y = startRow; y <= endRow; y++) {
+
         for (let x = startCol; x <= endCol; x++) {
-            drawTile(x, y, x * TILE_SIZE - cameraX, y * TILE_SIZE - cameraY);
+
+            drawTile(
+                x,
+                y,
+                x * TILE_SIZE - cameraX,
+                y * TILE_SIZE - cameraY
+            );
         }
     }
 
-    drawPlayer(player.pixelX - cameraX, player.pixelY - cameraY);
+
+    // Grand Centre Fakemon
+    drawCenterBuilding(
+        5 * TILE_SIZE - cameraX,
+        1 * TILE_SIZE - cameraY
+    );
+
+
+    // Joueur
+    drawPlayer(
+        player.pixelX - cameraX,
+        player.pixelY - cameraY
+    );
+
 
     updateZoneLabel();
 }
