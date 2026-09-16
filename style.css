@@ -1152,3 +1152,42 @@ body {
     color: #dc2626 !important;
     font-weight: bold;
 }
+
+.pc-columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+.pc-section {
+    min-width: 0;
+}
+
+.pc-section h3 {
+    margin-bottom: 10px;
+}
+
+#pcTeamList,
+#storageList {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.pc-exchange-button {
+    margin-top: 8px;
+    width: 100%;
+    padding: 8px;
+    cursor: pointer;
+}
+
+.pc-active-creature {
+    border: 2px solid gold;
+}
+
+@media (max-width: 700px) {
+
+    .pc-columns {
+        grid-template-columns: 1fr;
+    }
+
+}

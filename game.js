@@ -2615,7 +2615,6 @@ function drawCenterInterior() {
 }
 
 function openPC() {
-
     pcOpen = true;
     pressedKeys.clear();
 
@@ -2624,19 +2623,31 @@ function openPC() {
     pcWindow.id = "pcWindow";
 
     pcWindow.innerHTML = `
-        <div class="pc-box">
+        <div class="pc-box pc-team-box">
 
             <div class="pc-header">
-                <h2>🖥️ PC</h2>
+                <h2>🖥️ PC - Gestion de l'équipe</h2>
                 <button id="closePCButton">✕</button>
             </div>
 
-            <h3>📦 Créatures stockées</h3>
+            <div class="pc-columns">
 
-            <div id="storageList"></div>
+                <div class="pc-section">
+                    <h3>👥 Mon équipe (${currentPlayer.team.length}/6)</h3>
+                    <div id="pcTeamList"></div>
+                </div>
+
+                <div class="pc-section">
+                    <h3>📦 Stockage (${currentPlayer.storage.length})</h3>
+                    <div id="storageList"></div>
+                </div>
+
+            </div>
 
             <p class="pc-hint">
-                Appuie sur <strong>E</strong> ou <strong>Échap</strong> pour fermer
+                Clique sur une créature pour l'échanger avec ton équipe.
+                <br>
+                Appuie sur <strong>E</strong> ou <strong>Échap</strong> pour fermer.
             </p>
 
         </div>
@@ -2648,6 +2659,11 @@ function openPC() {
         .getElementById("closePCButton")
         .addEventListener("click", closePC);
 
+    updatePCDisplay();
+}
+
+function updatePCDisplay() {
+    updatePCTeamDisplay();
     updateStorageDisplay();
 }
 
@@ -2897,7 +2913,6 @@ function updateStorageDisplay() {
     storageList.innerHTML = "";
 
     if (currentPlayer.storage.length === 0) {
-
         storageList.innerHTML = `
             <div class="empty-storage">
                 📦 Aucune créature dans le stockage.
@@ -2943,12 +2958,148 @@ function updateStorageDisplay() {
                     ${creature.hp}/${creature.maxHp} PV
                 </small>
 
+                <button class="pc-exchange-button">
+                    ➡️ Ajouter à l'équipe
+                </button>
+
             </div>
         `;
+
+        card
+            .querySelector(".pc-exchange-button")
+            .addEventListener("click", () => {
+                moveStorageToTeam(index);
+            });
 
         storageList.appendChild(card);
     });
 }
+
+function updatePCTeamDisplay() {
+
+    const teamList = document.getElementById("pcTeamList");
+
+    if (!teamList) return;
+
+    teamList.innerHTML = "";
+
+    currentPlayer.team.forEach((creature, index) => {
+
+        const card = document.createElement("div");
+
+        card.className = "storage-creature";
+
+        if (index === currentPlayer.activeCreature) {
+            card.classList.add("pc-active-creature");
+        }
+
+        const hpPercent = Math.max(
+            0,
+            Math.min(
+                100,
+                (creature.hp / creature.maxHp) * 100
+            )
+        );
+
+        card.innerHTML = `
+            <img
+                src="fakemon_creatures/${String(creature.id).padStart(3, "0")}.png"
+                alt="${creature.name}"
+            >
+
+            <div class="storage-info">
+
+                <strong>
+                    ${creature.name}
+                    ${index === currentPlayer.activeCreature ? " ⭐" : ""}
+                </strong>
+
+                <span>Type : ${creature.type}</span>
+
+                <span>Nv. ${creature.level}</span>
+
+                <div class="storage-hp">
+                    <div style="width: ${hpPercent}%"></div>
+                </div>
+
+                <small>
+                    ${creature.hp}/${creature.maxHp} PV
+                </small>
+
+                <button class="pc-exchange-button">
+                    ⬅️ Mettre au stockage
+                </button>
+
+            </div>
+        `;
+
+        card
+            .querySelector(".pc-exchange-button")
+            .addEventListener("click", () => {
+                moveTeamToStorage(index);
+            });
+
+        teamList.appendChild(card);
+    });
+}
+
+function moveStorageToTeam(storageIndex) {
+
+    const creature = currentPlayer.storage[storageIndex];
+
+    if (!creature) return;
+
+    if (currentPlayer.team.length >= MAX_TEAM_SIZE) {
+        alert(
+            "Ton équipe est déjà complète ! Retire d'abord une créature de ton équipe."
+        );
+        return;
+    }
+
+    currentPlayer.storage.splice(storageIndex, 1);
+
+    currentPlayer.team.push(creature);
+
+    saveGame();
+    updateTeamDisplay();
+    updatePCDisplay();
+}
+
+function moveTeamToStorage(teamIndex) {
+
+    const creature = currentPlayer.team[teamIndex];
+
+    if (!creature) return;
+
+    if (currentPlayer.team.length <= 1) {
+        alert(
+            "Tu dois garder au moins une créature dans ton équipe."
+        );
+        return;
+    }
+
+    if (teamIndex === currentPlayer.activeCreature) {
+        alert(
+            "Cette créature est actuellement ta créature principale. Choisis d'abord une autre créature principale."
+        );
+        return;
+    }
+
+    currentPlayer.team.splice(teamIndex, 1);
+
+    currentPlayer.storage.push(creature);
+
+    // Corriger l'index de la créature principale
+    if (teamIndex < currentPlayer.activeCreature) {
+        currentPlayer.activeCreature--;
+    }
+
+    saveGame();
+    updateTeamDisplay();
+    updatePCDisplay();
+}
+
+
 
 // ===================== RENDU =====================
 
