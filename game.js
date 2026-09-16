@@ -20,6 +20,22 @@ const STARTER_CREATURES = [
     { id: 7, name: "Aquali", type: "Eau" }
 ];
 
+// Créatures sauvages pouvant apparaître dans les hautes herbes
+const WILD_CREATURES = [
+    { id: 10, name: "Rosapin", type: "Plante" },
+    { id: 11, name: "Rosélia", type: "Plante" },
+    { id: 16, name: "Lunégriff", type: "Normal" },
+    { id: 19, name: "Champignon", type: "Plante" },
+    { id: 20, name: "Aquapin", type: "Eau" },
+    { id: 21, name: "Électrisson", type: "Normal" },
+    { id: 24, name: "Serpentis", type: "Normal" },
+    { id: 28, name: "Crabraz", type: "Eau" }
+];
+
+const WILD_ENCOUNTER_CHANCE = 0.12;
+const WILD_MIN_LEVEL = 2;
+const WILD_MAX_LEVEL = 6;
+
 let currentPlayer = {
     pseudo: "",
     team: [],
@@ -350,6 +366,13 @@ const TILES = {
         deco: "flower"
     },
 
+    TALL_GRASS: {
+        color: "#3f8f3a",
+        walkable: true,
+        deco: "tallgrass",
+        encounterZone: true
+    },
+
     // Centre Fakemon
     CENTER_WALL: {
         color: "#ffffff",
@@ -442,6 +465,27 @@ function placeForest(grid) {
     }
 }
 
+function placeTallGrass(grid) {
+
+    // Zone de hautes herbes près du village
+    for (let y = 6; y < 11; y++) {
+        for (let x = 8; x < 13; x++) {
+            if (grid[y][x] === "GRASS") {
+                grid[y][x] = "TALL_GRASS";
+            }
+        }
+    }
+
+    // Zone de hautes herbes en lisière de forêt
+    for (let y = 2; y < 9; y++) {
+        for (let x = 18; x < 24; x++) {
+            if (grid[y][x] === "GRASS_DARK") {
+                grid[y][x] = "TALL_GRASS";
+            }
+        }
+    }
+}
+
 function placeLake(grid) {
     const cx = 7, cy = 17, rx = 5, ry = 4;
     for (let y = 13; y < MAP_ROWS; y++) {
@@ -487,6 +531,7 @@ function buildMap() {
 
     placeVillage(grid);
     placeForest(grid);
+    placeTallGrass(grid);
     placeLake(grid);
     placeDesert(grid);
 
@@ -521,6 +566,9 @@ let player = {
 let currentMap = "world";
 
 let pcOpen = false;
+
+let encounterOpen = false;
+let wildEncounterCreature = null;
 
 const CENTER_COLS = 20;
 const CENTER_ROWS = 15;
@@ -620,6 +668,11 @@ document.addEventListener("keydown", (e) => {
     }
 
     const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+
+    // Rencontre sauvage en cours
+    if (encounterOpen) {
+        return;
+    }
 
     // PC ouvert
     if (pcOpen) {
@@ -753,6 +806,114 @@ function checkBuildingInteraction() {
     }
 }
 
+function checkWildEncounter() {
+
+    if (currentMap !== "world") return;
+    if (encounterOpen) return;
+
+    const tile = TILES[mapGrid[player.tileY][player.tileX]];
+
+    if (!tile.encounterZone) return;
+
+    if (Math.random() < WILD_ENCOUNTER_CHANCE) {
+        startEncounter();
+    }
+}
+
+function pickRandomWildCreature() {
+    const species =
+        WILD_CREATURES[
+            Math.floor(Math.random() * WILD_CREATURES.length)
+        ];
+
+    const level =
+        WILD_MIN_LEVEL +
+        Math.floor(
+            Math.random() * (WILD_MAX_LEVEL - WILD_MIN_LEVEL + 1)
+        );
+
+    return createCreature(species.id, species.name, species.type, level);
+}
+
+function startEncounter() {
+
+    encounterOpen = true;
+    wildEncounterCreature = pickRandomWildCreature();
+
+    const creature = wildEncounterCreature;
+
+    const encounterWindow = document.createElement("div");
+
+    encounterWindow.id = "encounterWindow";
+
+    encounterWindow.innerHTML = `
+        <div class="encounter-box">
+
+            <p class="encounter-intro">
+                Un ${creature.name} sauvage apparaît !
+            </p>
+
+            <img
+                class="encounter-sprite"
+                src="fakemon_creatures/${String(creature.id).padStart(3, "0")}.png"
+                alt="${creature.name}"
+            >
+
+            <h3>${creature.name} <span>Nv. ${creature.level}</span></h3>
+
+            <div class="encounter-actions">
+                <button id="encounterFightButton">⚔️ Combattre</button>
+                <button id="encounterCaptureButton">🔴 Capturer</button>
+                <button id="encounterFleeButton">🏃 Fuir</button>
+            </div>
+
+            <p class="encounter-message" id="encounterMessage"></p>
+
+        </div>
+    `;
+
+    document.body.appendChild(encounterWindow);
+
+    document
+        .getElementById("encounterFightButton")
+        .addEventListener("click", () => {
+            showEncounterMessage(
+                "Le combat au tour par tour arrive dans une prochaine mise à jour !"
+            );
+        });
+
+    document
+        .getElementById("encounterCaptureButton")
+        .addEventListener("click", () => {
+            showEncounterMessage(
+                "La capture arrivera avec les sphères, dans une prochaine mise à jour !"
+            );
+        });
+
+    document
+        .getElementById("encounterFleeButton")
+        .addEventListener("click", closeEncounter);
+}
+
+function showEncounterMessage(text) {
+    const message = document.getElementById("encounterMessage");
+    if (message) {
+        message.textContent = text;
+    }
+}
+
+function closeEncounter() {
+
+    encounterOpen = false;
+    wildEncounterCreature = null;
+
+    const encounterWindow = document.getElementById("encounterWindow");
+
+    if (encounterWindow) {
+        encounterWindow.remove();
+    }
+}
+
 function stepToward(current, target, speed) {
     if (current < target) return Math.min(current + speed, target);
     if (current > target) return Math.max(current - speed, target);
@@ -760,6 +921,8 @@ function stepToward(current, target, speed) {
 }
 
 function updatePlayer() {
+
+    if (encounterOpen) return;
 
     // =========================
     // JOUEUR EN DÉPLACEMENT
@@ -800,6 +963,9 @@ function updatePlayer() {
             currentPlayer.currentMap = currentMap;
 
             saveGame();
+
+            // Vérifier une éventuelle rencontre sauvage
+            checkWildEncounter();
         }
 
         // Ne pas lancer un nouveau déplacement
@@ -1387,6 +1553,18 @@ function drawTile(x, y, screenX, screenY) {
         ctx.beginPath();
         ctx.arc(screenX + TILE_SIZE / 2, screenY + TILE_SIZE / 2, 3, 0, Math.PI * 2);
         ctx.fill();
+    } else if (tile.deco === "tallgrass") {
+        ctx.strokeStyle = "#1f5c1f";
+        ctx.lineWidth = 2;
+        const blades = [
+            [8, 26], [14, 22], [20, 27], [26, 23]
+        ];
+        blades.forEach(([bx, by]) => {
+            ctx.beginPath();
+            ctx.moveTo(screenX + bx, screenY + by);
+            ctx.lineTo(screenX + bx, screenY + by - 14);
+            ctx.stroke();
+        });
     } else if (tileKey === "WATER") {
         ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
         ctx.beginPath();
