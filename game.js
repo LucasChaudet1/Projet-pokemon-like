@@ -639,7 +639,7 @@ function loadGame() {
 // ===================== CARTE DU MONDE =====================
 
 const TILE_SIZE = 32;
-const MAP_COLS = 30;
+const MAP_COLS = 45;
 const MAP_ROWS = 24;
 
 const TILES = {
@@ -682,6 +682,64 @@ const TILES = {
         encounterZone: true
     },
 
+    BUSH: {
+        color: "#3f8f3a",
+        walkable: true,
+        deco: "bush",
+        decoColor: "#1f5c1f"
+    },
+
+    DRY_BUSH: {
+        color: "#e8d38a",
+        walkable: true,
+        deco: "bush",
+        decoColor: "#8a6d3a"
+    },
+
+    // Zone Volcanique
+    ASH: { color: "#5c5248", walkable: true },
+
+    LAVA: {
+        color: "#ff5a1f",
+        walkable: false,
+        deco: "lava"
+    },
+
+    OBSIDIAN: {
+        color: "#332d26",
+        walkable: false,
+        deco: "obsidian"
+    },
+
+    ASH_BUSH: {
+        color: "#5c5248",
+        walkable: true,
+        deco: "bush",
+        decoColor: "#2e2a24"
+    },
+
+    // Zone Arctique
+    SNOW: { color: "#eef6fb", walkable: true },
+
+    ICE: {
+        color: "#bfe3f5",
+        walkable: false,
+        deco: "ice"
+    },
+
+    PINE: {
+        color: "#eef6fb",
+        walkable: false,
+        deco: "pine"
+    },
+
+    SNOW_BUSH: {
+        color: "#eef6fb",
+        walkable: true,
+        deco: "bush",
+        decoColor: "#c8dced"
+    },
+
     // Centre Fakemon
     CENTER_WALL: {
         color: "#ffffff",
@@ -696,11 +754,10 @@ const TILES = {
 
 function getBaseTile(x, y) {
     const isTop = y < 12;
-    const isLeft = x < 15;
-    if (isTop && isLeft) return "GRASS";
-    if (isTop && !isLeft) return "GRASS_DARK";
-    if (!isTop && isLeft) return "SAND";
-    return "DESERT";
+
+    if (x < 15) return isTop ? "GRASS" : "SAND";
+    if (x < 30) return isTop ? "GRASS_DARK" : "DESERT";
+    return isTop ? "ASH" : "SNOW";
 }
 
 function placeVillage(grid) {
@@ -766,7 +823,7 @@ function placeVillage(grid) {
 
 function placeForest(grid) {
     for (let y = 0; y < 11; y++) {
-        for (let x = 16; x < MAP_COLS; x++) {
+        for (let x = 16; x < 29; x++) {
             if ((x * 7 + y * 13) % 5 === 0) {
                 grid[y][x] = "TREE";
             }
@@ -810,9 +867,90 @@ function placeLake(grid) {
 
 function placeDesert(grid) {
     for (let y = 13; y < MAP_ROWS; y++) {
-        for (let x = 16; x < MAP_COLS; x++) {
+        for (let x = 16; x < 29; x++) {
             if ((x * 11 + y * 3) % 9 === 0) {
                 grid[y][x] = "ROCK";
+            }
+        }
+    }
+}
+
+function placeVolcanicZone(grid) {
+    for (let y = 0; y < 11; y++) {
+        for (let x = 31; x < MAP_COLS; x++) {
+            if ((x * 5 + y * 9) % 11 === 0) {
+                grid[y][x] = "LAVA";
+            } else if ((x * 13 + y * 3) % 7 === 0) {
+                grid[y][x] = "OBSIDIAN";
+            }
+        }
+    }
+}
+
+function placeArcticZone(grid) {
+    for (let y = 13; y < MAP_ROWS; y++) {
+        for (let x = 31; x < MAP_COLS; x++) {
+            if ((x * 5 + y * 9) % 11 === 0) {
+                grid[y][x] = "ICE";
+            } else if ((x * 13 + y * 3) % 7 === 0) {
+                grid[y][x] = "PINE";
+            }
+        }
+    }
+}
+
+function placeBushes(grid) {
+
+    // Bourg Palette : buissons dans l'herbe autour du village
+    for (let y = 0; y < 11; y++) {
+        for (let x = 0; x < 14; x++) {
+            if (grid[y][x] === "GRASS" && (x * 5 + y * 7) % 23 === 0) {
+                grid[y][x] = "BUSH";
+            }
+        }
+    }
+
+    // Forêt Sombre : buissons entre les arbres
+    for (let y = 0; y < 11; y++) {
+        for (let x = 16; x < 29; x++) {
+            if (grid[y][x] === "GRASS_DARK" && (x * 9 + y * 2) % 13 === 0) {
+                grid[y][x] = "BUSH";
+            }
+        }
+    }
+
+    // Lac Azur : buissons secs sur le sable
+    for (let y = 13; y < MAP_ROWS; y++) {
+        for (let x = 0; x < 14; x++) {
+            if (grid[y][x] === "SAND" && (x * 3 + y * 11) % 17 === 0) {
+                grid[y][x] = "DRY_BUSH";
+            }
+        }
+    }
+
+    // Route Sablonneuse : buissons secs entre les rochers
+    for (let y = 13; y < MAP_ROWS; y++) {
+        for (let x = 16; x < 29; x++) {
+            if (grid[y][x] === "DESERT" && (x * 3 + y * 17) % 13 === 0) {
+                grid[y][x] = "DRY_BUSH";
+            }
+        }
+    }
+
+    // Zone Volcanique : buissons calcinés
+    for (let y = 0; y < 11; y++) {
+        for (let x = 31; x < MAP_COLS; x++) {
+            if (grid[y][x] === "ASH" && (x * 7 + y * 5) % 19 === 0) {
+                grid[y][x] = "ASH_BUSH";
+            }
+        }
+    }
+
+    // Zone Arctique : buissons givrés
+    for (let y = 13; y < MAP_ROWS; y++) {
+        for (let x = 31; x < MAP_COLS; x++) {
+            if (grid[y][x] === "SNOW" && (x * 7 + y * 5) % 19 === 0) {
+                grid[y][x] = "SNOW_BUSH";
             }
         }
     }
@@ -828,7 +966,7 @@ function buildMap() {
         grid.push(row);
     }
 
-    // Chemin qui relie les 4 zones
+    // Chemin qui relie les zones
     for (let x = 0; x < MAP_COLS; x++) {
         grid[11][x] = "PATH";
         grid[12][x] = "PATH";
@@ -836,6 +974,8 @@ function buildMap() {
     for (let y = 0; y < MAP_ROWS; y++) {
         grid[y][14] = "PATH";
         grid[y][15] = "PATH";
+        grid[y][29] = "PATH";
+        grid[y][30] = "PATH";
     }
 
     placeVillage(grid);
@@ -843,17 +983,19 @@ function buildMap() {
     placeTallGrass(grid);
     placeLake(grid);
     placeDesert(grid);
+    placeVolcanicZone(grid);
+    placeArcticZone(grid);
+    placeBushes(grid);
 
     return grid;
 }
 
 function getZoneName(x, y) {
     const isTop = y < 12;
-    const isLeft = x < 15;
-    if (isTop && isLeft) return "🏘️ Village de Départ";
-    if (isTop && !isLeft) return "🌲 Forêt Sombre";
-    if (!isTop && isLeft) return "🌊 Lac Azur";
-    return "🏜️ Route Sablonneuse";
+
+    if (x < 15) return isTop ? "🏘️ Bourg Palette" : "🌊 Lac Azur";
+    if (x < 30) return isTop ? "🌲 Forêt Sombre" : "🏜️ Route Sablonneuse";
+    return isTop ? "🌋 Zone Volcanique" : "❄️ Zone Arctique";
 }
 
 const mapGrid = buildMap();
@@ -969,7 +1111,7 @@ function exitCenter() {
     // Position devant le Centre
     setPlayerTile(7, 5);
 
-    zoneLabel.textContent = "🏘️ Village de Départ";
+    zoneLabel.textContent = "🏘️ Bourg Palette";
 
     saveGame();
 }
@@ -2480,6 +2622,54 @@ function drawTile(x, y, screenX, screenY) {
             ctx.lineTo(screenX + bx, screenY + by - 14);
             ctx.stroke();
         });
+    } else if (tile.deco === "bush") {
+        ctx.fillStyle = tile.decoColor || "#1f5c1f";
+        const bumps = [
+            [TILE_SIZE / 2 - 8, TILE_SIZE / 2 + 2, 8],
+            [TILE_SIZE / 2 + 7, TILE_SIZE / 2 + 3, 8],
+            [TILE_SIZE / 2, TILE_SIZE / 2 - 5, 9]
+        ];
+        bumps.forEach(([bx, by, r]) => {
+            ctx.beginPath();
+            ctx.arc(screenX + bx, screenY + by, r, 0, Math.PI * 2);
+            ctx.fill();
+        });
+    } else if (tile.deco === "lava") {
+        ctx.fillStyle = "#ffcf4d";
+        ctx.beginPath();
+        ctx.arc(screenX + TILE_SIZE / 2 - 5, screenY + TILE_SIZE / 2, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(screenX + TILE_SIZE / 2 + 7, screenY + TILE_SIZE / 2 - 4, 4, 0, Math.PI * 2);
+        ctx.fill();
+    } else if (tile.deco === "obsidian") {
+        ctx.fillStyle = "#111111";
+        ctx.beginPath();
+        ctx.ellipse(screenX + TILE_SIZE / 2, screenY + TILE_SIZE / 2 + 4, 12, 8, 0, 0, Math.PI * 2);
+        ctx.fill();
+    } else if (tile.deco === "ice") {
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.7)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(screenX + 4, screenY + TILE_SIZE / 2);
+        ctx.lineTo(screenX + TILE_SIZE - 4, screenY + TILE_SIZE / 2);
+        ctx.moveTo(screenX + TILE_SIZE / 2, screenY + 6);
+        ctx.lineTo(screenX + TILE_SIZE / 2, screenY + TILE_SIZE - 6);
+        ctx.stroke();
+    } else if (tile.deco === "pine") {
+        ctx.fillStyle = "#5b3a21";
+        ctx.fillRect(screenX + TILE_SIZE / 2 - 3, screenY + TILE_SIZE - 12, 6, 12);
+        ctx.fillStyle = "#1a4a33";
+        ctx.beginPath();
+        ctx.moveTo(screenX + TILE_SIZE / 2, screenY + 4);
+        ctx.lineTo(screenX + TILE_SIZE / 2 - 12, screenY + TILE_SIZE - 10);
+        ctx.lineTo(screenX + TILE_SIZE / 2 + 12, screenY + TILE_SIZE - 10);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = "#ffffff";
+        ctx.beginPath();
+        ctx.arc(screenX + TILE_SIZE / 2, screenY + 6, 4, 0, Math.PI * 2);
+        ctx.fill();
     } else if (tileKey === "WATER") {
         ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
         ctx.beginPath();
