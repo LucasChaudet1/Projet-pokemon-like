@@ -2251,14 +2251,19 @@ function finishBattleWin() {
 
     const winnerName = battlePlayerCreature.name;
     const xpGain = battleWildCreature.level * 10;
+    const moneyGain = battleWildCreature.level * 5;
     const levelUpMessages = gainXP(battlePlayerCreature, xpGain);
+
+    currentPlayer.money += moneyGain;
 
     addBattleLog(`${battleWildCreature.name} est K.O. !`);
     addBattleLog(`${winnerName} gagne ${xpGain} points d'expérience !`);
+    addBattleLog(`Tu gagnes ${moneyGain} 💰 !`);
 
     levelUpMessages.forEach(addBattleLog);
 
     updateTeamDisplay();
+    updateMoneyDisplay();
     saveGame();
 
     renderBattle(true);
@@ -2283,8 +2288,12 @@ function finishBattleCapture() {
     battleEnded = true;
 
     const captured = battleWildCreature;
+    const moneyGain = captured.level * 5;
 
     markPokedexCaught(captured.id);
+
+    currentPlayer.money += moneyGain;
+    addBattleLog(`Tu gagnes ${moneyGain} 💰 !`);
 
     if (currentPlayer.team.length < MAX_TEAM_SIZE) {
         currentPlayer.team.push(captured);
@@ -2294,6 +2303,7 @@ function finishBattleCapture() {
         addBattleLog(`${captured.name} a été envoyé(e) au stockage (équipe pleine).`);
     }
 
+    updateMoneyDisplay();
     saveGame();
 
     renderBattle(true);
