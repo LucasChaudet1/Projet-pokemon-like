@@ -196,25 +196,85 @@ body {
     left: 20px;
     right: 20px;
     display: flex;
-    justify-content: space-between;
     align-items: center;
     z-index: 10;
 }
 
-.starting-creature {
-    background: rgba(0, 0, 0, 0.7);
-    padding: 10px 15px;
-    border-radius: 8px;
-    font-size: 14px;
+.team-display {
+    position: absolute;
+    right: 0;
+    top: 0;
+
+    background: rgba(0, 0, 0, 0.75);
+    padding: 8px;
+    border-radius: 10px;
+
     display: flex;
+    gap: 6px;
+
+    max-width: 500px;
+}
+.team-creature {
+    width: 65px;
+    height: 65px;
+
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+
+    display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 10px;
+    justify-content: center;
+
+    position: relative;
 }
 
-.starting-creature img {
-    width: 40px;
-    height: 40px;
+.team-creature img {
+    width: 38px;
+    height: 38px;
     object-fit: contain;
+}
+
+.team-creature.active {
+    border: 2px solid #ffcc00;
+    box-shadow: 0 0 10px #ffcc00;
+}
+
+.team-creature-info {
+    position: absolute;
+
+    right: 70px;
+    top: 0;
+
+    width: 130px;
+
+    background: rgba(0, 0, 0, 0.9);
+    border-radius: 8px;
+
+    padding: 8px;
+
+    display: none;
+}
+
+.team-creature:hover .team-creature-info {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.hp-bar {
+    width: 100%;
+    height: 6px;
+
+    background: #555;
+    border-radius: 5px;
+
+    overflow: hidden;
+}
+
+.hp-fill {
+    height: 100%;
+    background: #45d65c;
 }
 
 /* Carte du monde */

@@ -6,7 +6,7 @@ const pseudoInput = document.getElementById("pseudoInput");
 const startButton = document.getElementById("startButton");
 
 const playerName = document.getElementById("playerName");
-const startingCreature = document.getElementById("startingCreature");
+const teamDisplay = document.getElementById("teamDisplay");
 const creatureSelection = document.getElementById("creatureSelection");
 
 const zoneLabel = document.getElementById("zoneLabel");
@@ -22,8 +22,12 @@ const STARTER_CREATURES = [
 
 let currentPlayer = {
     pseudo: "",
-    creature: null
+    team: [],
+    activeCreature: 0,
+    position: null
 };
+
+const MAX_TEAM_SIZE = 6;
 
 startButton.addEventListener("click", startGame);
 
@@ -68,34 +72,135 @@ function showCreatureSelection() {
     creatureScreen.classList.remove("hidden");
 }
 
-function selectCreature(id, name, type) {
-    currentPlayer.creature = { id, name, type };
+function createCreature(id, name, type, level = 5) {
+    const stats = {
+        Feu: {
+            maxHp: 24,
+            attack: 14,
+            defense: 10,
+            speed: 13
+        },
+        Plante: {
+            maxHp: 26,
+            attack: 11,
+            defense: 13,
+            speed: 9
+        },
+        Eau: {
+            maxHp: 25,
+            attack: 12,
+            defense: 11,
+            speed: 11
+        }
+    };
 
-    // Afficher le pseudo
+    const base = stats[type] || {
+        maxHp: 25,
+        attack: 12,
+        defense: 10,
+        speed: 10
+    };
+
+    return {
+        uid: Date.now() + Math.random(),
+
+        id,
+        name,
+        type,
+
+        level,
+        xp: 0,
+
+        maxHp: base.maxHp,
+        hp: base.maxHp,
+
+        attack: base.attack,
+        defense: base.defense,
+        speed: base.speed,
+
+        fainted: false,
+
+        attacks: []
+    };
+}
+
+function updateTeamDisplay() {
+    teamDisplay.innerHTML = "";
+
+    currentPlayer.team.forEach((creature, index) => {
+        const creatureDiv = document.createElement("div");
+
+        creatureDiv.className = "team-creature";
+
+        if (index === currentPlayer.activeCreature) {
+            creatureDiv.classList.add("active");
+        }
+
+        const hpPercent = Math.max(
+            0,
+            Math.min(100, (creature.hp / creature.maxHp) * 100)
+        );
+
+        creatureDiv.innerHTML = `
+            <img
+                src="fakemon_creatures/${String(creature.id).padStart(3, "0")}.png"
+                alt="${creature.name}"
+            >
+
+            <div class="team-creature-info">
+                <strong>${creature.name}</strong>
+                <span>Nv. ${creature.level}</span>
+
+                <div class="hp-bar">
+                    <div
+                        class="hp-fill"
+                        style="width: ${hpPercent}%"
+                    ></div>
+                </div>
+
+                <small>
+                    ${creature.hp}/${creature.maxHp} PV
+                </small>
+            </div>
+        `;
+
+        teamDisplay.appendChild(creatureDiv);
+    });
+}
+
+function selectCreature(id, name, type) {
+    const creature = createCreature(id, name, type, 5);
+
+    currentPlayer.team = [creature];
+    currentPlayer.activeCreature = 0;
+
     playerName.textContent = "👤 " + currentPlayer.pseudo;
 
-    // Afficher la créature
-    const creatureDiv = document.createElement("div");
-    creatureDiv.style.display = "flex";
-    creatureDiv.style.alignItems = "center";
-    creatureDiv.style.gap = "10px";
-    creatureDiv.innerHTML = `
-        <img src="fakemon_creatures/${String(id).padStart(3, '0')}.png" alt="${name}" style="width: 40px; height: 40px; object-fit: contain;">
-        <span>${name} (${type})</span>
-    `;
-    startingCreature.appendChild(creatureDiv);
+    updateTeamDisplay();
 
-    // Cacher l'écran de sélection
     creatureScreen.classList.add("hidden");
-
-    // Afficher l'écran du jeu
     gameScreen.classList.remove("hidden");
 
-    // Position de départ sur la carte
-    currentPlayer.position = { x: player.tileX, y: player.tileY };
+    currentPlayer.position = {
+        x: player.tileX,
+        y: player.tileY
+    };
 
-    // Sauvegarder la partie
     saveGame();
+}
+
+function addCreatureToTeam(creature) {
+    if (currentPlayer.team.length >= MAX_TEAM_SIZE) {
+        alert("Ton équipe est complète ! Maximum 6 créatures.");
+        return false;
+    }
+
+    currentPlayer.team.push(creature);
+
+    updateTeamDisplay();
+    saveGame();
+
+    return true;
 }
 
 function saveGame() {
@@ -105,27 +210,56 @@ function saveGame() {
 
 function loadGame() {
     const saved = localStorage.getItem("playerData");
-    if (saved) {
-        currentPlayer = JSON.parse(saved);
-        // Afficher le joueur sauvegardé
-        playerName.textContent = "👤 " + currentPlayer.pseudo;
+
+    if (!saved) return;
+
+    currentPlayer = JSON.parse(saved);
+
+    if (typeof currentPlayer.activeCreature !== "number") {
+        currentPlayer.activeCreature = 0;
+    }
+
+    if (
+        currentPlayer.activeCreature < 0 ||
+        currentPlayer.activeCreature >= currentPlayer.team.length
+    ) {
+        currentPlayer.activeCreature = 0;
+    }
+
+    // Sécurité pour les anciennes sauvegardes
+    if (!currentPlayer.team) {
+        currentPlayer.team = [];
+
         if (currentPlayer.creature) {
-            const { id, name, type } = currentPlayer.creature;
-            const creatureDiv = document.createElement("div");
-            creatureDiv.style.display = "flex";
-            creatureDiv.style.alignItems = "center";
-            creatureDiv.style.gap = "10px";
-            creatureDiv.innerHTML = `
-                <img src="fakemon_creatures/${String(id).padStart(3, '0')}.png" alt="${name}" style="width: 40px; height: 40px; object-fit: contain;">
-                <span>${name} (${type})</span>
-            `;
-            startingCreature.appendChild(creatureDiv);
-            startScreen.classList.add("hidden");
-            gameScreen.classList.remove("hidden");
+            currentPlayer.team.push(
+                createCreature(
+                    currentPlayer.creature.id,
+                    currentPlayer.creature.name,
+                    currentPlayer.creature.type
+                )
+            );
         }
-        if (currentPlayer.position) {
-            setPlayerTile(currentPlayer.position.x, currentPlayer.position.y);
-        }
+
+        delete currentPlayer.creature;
+    }
+
+    // Afficher le pseudo
+    playerName.textContent = "👤 " + currentPlayer.pseudo;
+
+    // Afficher l'équipe
+    updateTeamDisplay();
+
+    // Afficher directement le jeu
+    startScreen.classList.add("hidden");
+    creatureScreen.classList.add("hidden");
+    gameScreen.classList.remove("hidden");
+
+    // Restaurer la position
+    if (currentPlayer.position) {
+        setPlayerTile(
+            currentPlayer.position.x,
+            currentPlayer.position.y
+        );
     }
 }
 
