@@ -627,6 +627,11 @@ let dialogueOpen = false;
 let currentDialogueNPC = null;
 let currentDialogueLineIndex = 0;
 
+let battleOpen = false;
+let battlePlayerCreature = null;
+let battleWildCreature = null;
+let battleEnded = false;
+
 const CENTER_COLS = 20;
 const CENTER_ROWS = 15;
 
@@ -688,6 +693,14 @@ function enterCenter() {
 
     zoneLabel.textContent = "🏥 Centre Fakemon";
 
+    // Soigne gratuitement toute l'équipe
+    currentPlayer.team.forEach(creature => {
+        creature.hp = creature.maxHp;
+        creature.fainted = false;
+    });
+
+    updateTeamDisplay();
+
     saveGame();
 }
 
@@ -728,6 +741,11 @@ document.addEventListener("keydown", (e) => {
 
     // Rencontre sauvage en cours
     if (encounterOpen) {
+        return;
+    }
+
+    // Combat en cours
+    if (battleOpen) {
         return;
     }
 
@@ -1098,7 +1116,6 @@ function startEncounter() {
 
             <div class="encounter-actions">
                 <button id="encounterFightButton">⚔️ Combattre</button>
-                <button id="encounterCaptureButton">🔴 Capturer</button>
                 <button id="encounterFleeButton">🏃 Fuir</button>
             </div>
 
@@ -1112,17 +1129,19 @@ function startEncounter() {
     document
         .getElementById("encounterFightButton")
         .addEventListener("click", () => {
-            showEncounterMessage(
-                "Le combat au tour par tour arrive dans une prochaine mise à jour !"
-            );
-        });
 
-    document
-        .getElementById("encounterCaptureButton")
-        .addEventListener("click", () => {
-            showEncounterMessage(
-                "La capture arrivera avec les sphères, dans une prochaine mise à jour !"
-            );
+            const activeCreature =
+                currentPlayer.team[currentPlayer.activeCreature];
+
+            if (!activeCreature || activeCreature.hp <= 0) {
+                showEncounterMessage(
+                    "Ta créature est K.O. ! Soigne-la au Centre Fakemon."
+                );
+                return;
+            }
+
+            closeEncounter();
+            startBattle(creature);
         });
 
     document
@@ -1149,6 +1168,328 @@ function closeEncounter() {
     }
 }
 
+// ===================== COMBAT AU TOUR PAR TOUR =====================
+
+let battleLog = [];
+
+function xpForNextLevel(level) {
+    return level * 20;
+}
+
+function levelUpCreature(creature) {
+    creature.level++;
+    creature.maxHp += 2;
+    creature.hp += 2;
+    creature.attack += 1;
+    creature.defense += 1;
+    creature.speed += 1;
+}
+
+function gainXP(creature, amount) {
+
+    creature.xp += amount;
+
+    const messages = [];
+
+    while (creature.xp >= xpForNextLevel(creature.level)) {
+        creature.xp -= xpForNextLevel(creature.level);
+        levelUpCreature(creature);
+        messages.push(`${creature.name} monte au niveau ${creature.level} !`);
+    }
+
+    return messages;
+}
+
+function computeCaptureChance(wild) {
+
+    const hpFactor = 1 - wild.hp / wild.maxHp;
+    const levelFactor = Math.max(0, 1 - wild.level / 20);
+
+    const chance = 0.3 + hpFactor * 0.5 + levelFactor * 0.2;
+
+    return Math.min(0.95, Math.max(0.05, chance));
+}
+
+function computeDamage(attacker, defender) {
+    const variance = 0.85 + Math.random() * 0.3;
+    const raw = (attacker.attack - defender.defense * 0.5) * variance;
+    return Math.max(1, Math.round(raw));
+}
+
+function addBattleLog(text) {
+    battleLog.push(text);
+}
+
+function applyAttack(attacker, defender) {
+    const damage = computeDamage(attacker, defender);
+    defender.hp = Math.max(0, defender.hp - damage);
+    addBattleLog(`${attacker.name} inflige ${damage} dégâts à ${defender.name} !`);
+}
+
+function startBattle(wild) {
+
+    battleOpen = true;
+    battleEnded = false;
+    battlePlayerCreature = currentPlayer.team[currentPlayer.activeCreature];
+    battleWildCreature = wild;
+    battleLog = [];
+
+    addBattleLog(`Un ${wild.name} sauvage veut se battre !`);
+
+    const battleWindow = document.createElement("div");
+
+    battleWindow.id = "battleWindow";
+
+    battleWindow.innerHTML = `
+        <div class="battle-box">
+
+            <h2 class="battle-title">⚔️ Combat sauvage</h2>
+
+            <div class="battle-combatants">
+
+                <div class="battle-side">
+                    <img id="battlePlayerSprite" class="battle-sprite" src="" alt="">
+                    <strong id="battlePlayerName"></strong>
+                    <span id="battlePlayerLevel"></span>
+                    <div class="battle-hp-bar"><div id="battlePlayerHpFill" class="battle-hp-fill"></div></div>
+                    <small id="battlePlayerHpText"></small>
+                </div>
+
+                <div class="battle-vs">VS</div>
+
+                <div class="battle-side">
+                    <img id="battleWildSprite" class="battle-sprite" src="" alt="">
+                    <strong id="battleWildName"></strong>
+                    <span id="battleWildLevel"></span>
+                    <div class="battle-hp-bar"><div id="battleWildHpFill" class="battle-hp-fill"></div></div>
+                    <small id="battleWildHpText"></small>
+                </div>
+
+            </div>
+
+            <div class="battle-log" id="battleLog"></div>
+
+            <div class="battle-actions" id="battleActions">
+                <button id="battleAttackButton">⚔️ Attaquer</button>
+                <button id="battleCaptureButton">🔴 Capturer</button>
+                <button id="battleFleeButton">🏃 Fuir</button>
+            </div>
+
+        </div>
+    `;
+
+    document.body.appendChild(battleWindow);
+
+    document
+        .getElementById("battleAttackButton")
+        .addEventListener("click", playerAttack);
+
+    document
+        .getElementById("battleCaptureButton")
+        .addEventListener("click", playerCapture);
+
+    document
+        .getElementById("battleFleeButton")
+        .addEventListener("click", playerFlee);
+
+    renderBattle();
+}
+
+function renderBattle(final = false) {
+
+    const player = battlePlayerCreature;
+    const wild = battleWildCreature;
+
+    document.getElementById("battlePlayerSprite").src =
+        `fakemon_creatures/${String(player.id).padStart(3, "0")}.png`;
+    document.getElementById("battlePlayerName").textContent = player.name;
+    document.getElementById("battlePlayerLevel").textContent = `Nv. ${player.level}`;
+
+    const playerHpPercent = Math.max(0, Math.min(100, (player.hp / player.maxHp) * 100));
+    document.getElementById("battlePlayerHpFill").style.width = `${playerHpPercent}%`;
+    document.getElementById("battlePlayerHpText").textContent = `${player.hp}/${player.maxHp} PV`;
+
+    document.getElementById("battleWildSprite").src =
+        `fakemon_creatures/${String(wild.id).padStart(3, "0")}.png`;
+    document.getElementById("battleWildName").textContent = wild.name;
+    document.getElementById("battleWildLevel").textContent = `Nv. ${wild.level}`;
+
+    const wildHpPercent = Math.max(0, Math.min(100, (wild.hp / wild.maxHp) * 100));
+    document.getElementById("battleWildHpFill").style.width = `${wildHpPercent}%`;
+    document.getElementById("battleWildHpText").textContent = `${wild.hp}/${wild.maxHp} PV`;
+
+    const logEl = document.getElementById("battleLog");
+    logEl.innerHTML = battleLog.map(line => `<p>${line}</p>`).join("");
+    logEl.scrollTop = logEl.scrollHeight;
+
+    if (final) {
+
+        const actionsEl = document.getElementById("battleActions");
+
+        actionsEl.innerHTML = `<button id="battleCloseButton">Fermer</button>`;
+
+        document
+            .getElementById("battleCloseButton")
+            .addEventListener("click", closeBattle);
+    }
+}
+
+function playerAttack() {
+
+    if (!battleOpen || battleEnded) return;
+
+    const player = battlePlayerCreature;
+    const wild = battleWildCreature;
+
+    const playerFirst =
+        player.speed === wild.speed
+            ? Math.random() < 0.5
+            : player.speed > wild.speed;
+
+    if (playerFirst) {
+
+        applyAttack(player, wild);
+
+        if (wild.hp <= 0) {
+            finishBattleWin();
+            return;
+        }
+
+        applyAttack(wild, player);
+
+        if (player.hp <= 0) {
+            finishBattleLose();
+            return;
+        }
+
+    } else {
+
+        applyAttack(wild, player);
+
+        if (player.hp <= 0) {
+            finishBattleLose();
+            return;
+        }
+
+        applyAttack(player, wild);
+
+        if (wild.hp <= 0) {
+            finishBattleWin();
+            return;
+        }
+    }
+
+    renderBattle();
+}
+
+function playerCapture() {
+
+    if (!battleOpen || battleEnded) return;
+
+    const wild = battleWildCreature;
+    const chance = computeCaptureChance(wild);
+    const success = Math.random() < chance;
+
+    if (success) {
+        addBattleLog(`Tu as capturé ${wild.name} !`);
+        finishBattleCapture();
+        return;
+    }
+
+    addBattleLog(`La capture a échoué... ${wild.name} riposte !`);
+
+    applyAttack(wild, battlePlayerCreature);
+
+    if (battlePlayerCreature.hp <= 0) {
+        finishBattleLose();
+        return;
+    }
+
+    renderBattle();
+}
+
+function playerFlee() {
+
+    if (!battleOpen || battleEnded) return;
+
+    addBattleLog("Tu prends la fuite !");
+
+    finishBattleFlee();
+}
+
+function finishBattleWin() {
+
+    battleEnded = true;
+
+    const xpGain = battleWildCreature.level * 10;
+    const levelUpMessages = gainXP(battlePlayerCreature, xpGain);
+
+    addBattleLog(`${battleWildCreature.name} est K.O. !`);
+    addBattleLog(`${battlePlayerCreature.name} gagne ${xpGain} points d'expérience !`);
+
+    levelUpMessages.forEach(addBattleLog);
+
+    updateTeamDisplay();
+    saveGame();
+
+    renderBattle(true);
+}
+
+function finishBattleLose() {
+
+    battleEnded = true;
+    battlePlayerCreature.fainted = true;
+
+    addBattleLog(`${battlePlayerCreature.name} est K.O. !`);
+    addBattleLog("Rends-toi au Centre Fakemon pour soigner ton équipe.");
+
+    updateTeamDisplay();
+    saveGame();
+
+    renderBattle(true);
+}
+
+function finishBattleCapture() {
+
+    battleEnded = true;
+
+    const captured = battleWildCreature;
+
+    if (currentPlayer.team.length < MAX_TEAM_SIZE) {
+        currentPlayer.team.push(captured);
+        updateTeamDisplay();
+    } else {
+        currentPlayer.storage.push(captured);
+        addBattleLog(`${captured.name} a été envoyé(e) au stockage (équipe pleine).`);
+    }
+
+    saveGame();
+
+    renderBattle(true);
+}
+
+function finishBattleFlee() {
+
+    battleEnded = true;
+
+    renderBattle(true);
+}
+
+function closeBattle() {
+
+    battleOpen = false;
+    battleEnded = false;
+    battlePlayerCreature = null;
+    battleWildCreature = null;
+    battleLog = [];
+
+    const battleWindow = document.getElementById("battleWindow");
+
+    if (battleWindow) {
+        battleWindow.remove();
+    }
+}
+
 function stepToward(current, target, speed) {
     if (current < target) return Math.min(current + speed, target);
     if (current > target) return Math.max(current - speed, target);
@@ -1157,7 +1498,7 @@ function stepToward(current, target, speed) {
 
 function updatePlayer() {
 
-    if (encounterOpen || dialogueOpen) return;
+    if (encounterOpen || dialogueOpen || battleOpen) return;
 
     // =========================
     // JOUEUR EN DÉPLACEMENT
