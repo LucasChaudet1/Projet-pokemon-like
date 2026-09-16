@@ -314,3 +314,173 @@ body {
     font-size: 13px;
     color: rgba(255, 255, 255, 0.85);
 }
+
+/* =========================
+   POP-UP DU PC
+   ========================= */
+
+#pcWindow {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+
+    display: flex;
+    justify-content: center;
+    align-items: center;
+
+    background: rgba(0, 0, 0, 0.65);
+
+    z-index: 9999;
+}
+
+
+/* Fenêtre du PC */
+
+.pc-box {
+    width: 600px;
+    max-width: 90vw;
+    max-height: 80vh;
+
+    color: #1f2937;
+
+    background: #f5f7fb;
+
+    border: 4px solid #374151;
+    border-radius: 16px;
+
+    padding: 20px;
+
+    box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
+
+    overflow-y: auto;
+}
+
+
+/* Barre du haut */
+
+.pc-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+
+    margin-bottom: 20px;
+}
+
+.pc-header h2 {
+    margin: 0;
+}
+
+
+/* Bouton fermer */
+
+#closePCButton {
+    width: 40px;
+    height: 40px;
+
+    border: none;
+    border-radius: 8px;
+
+    background: #ef4444;
+    color: white;
+
+    font-size: 20px;
+    font-weight: bold;
+
+    cursor: pointer;
+}
+
+#closePCButton:hover {
+    background: #dc2626;
+}
+
+
+/* Liste des créatures */
+
+#storageList {
+    display: grid;
+
+    grid-template-columns: repeat(2, 1fr);
+
+    gap: 12px;
+}
+
+
+/* Carte d'une créature */
+
+.storage-creature {
+    display: flex;
+    align-items: center;
+
+    gap: 12px;
+
+    padding: 10px;
+
+    background: white;
+
+    border: 2px solid #d1d5db;
+    border-radius: 10px;
+}
+
+.storage-creature img {
+    width: 64px;
+    height: 64px;
+
+    object-fit: contain;
+}
+
+.storage-info {
+    display: flex;
+    flex-direction: column;
+
+    gap: 3px;
+}
+
+.storage-info strong {
+    font-size: 16px;
+}
+
+
+/* Barre de PV */
+
+.storage-hp {
+    width: 120px;
+    height: 8px;
+
+    background: #d1d5db;
+
+    border-radius: 10px;
+
+    overflow: hidden;
+}
+
+.storage-hp > div {
+    height: 100%;
+
+    background: #22c55e;
+}
+
+
+/* Texte quand le PC est vide */
+
+.empty-storage {
+    grid-column: 1 / -1;
+
+    text-align: center;
+
+    padding: 30px;
+
+    color: #6b7280;
+}
+
+
+/* Message en bas */
+
+.pc-hint {
+    margin-top: 20px;
+
+    text-align: center;
+
+    color: #6b7280;
+}

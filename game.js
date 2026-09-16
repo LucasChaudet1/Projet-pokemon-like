@@ -23,6 +23,7 @@ const STARTER_CREATURES = [
 let currentPlayer = {
     pseudo: "",
     team: [],
+    storage: [],
     activeCreature: 0,
     position: null
 };
@@ -215,6 +216,10 @@ function loadGame() {
     if (!saved) return;
 
     currentPlayer = JSON.parse(saved);
+
+    if (!Array.isArray(currentPlayer.storage)) {
+        currentPlayer.storage = [];
+    }
 
 
     // =========================
@@ -515,6 +520,8 @@ let player = {
 
 let currentMap = "world";
 
+let pcOpen = false;
+
 const CENTER_COLS = 20;
 const CENTER_ROWS = 15;
 
@@ -545,6 +552,9 @@ function buildCenterMap() {
 
         grid.push(row);
     }
+
+    // PC de stockage
+    grid[7][15] = "CENTER_WALL";
 
     // Porte de sortie
     grid[CENTER_ROWS - 1][Math.floor(CENTER_COLS / 2)] = "CENTER_DOOR";
@@ -602,14 +612,31 @@ function setPlayerTile(x, y) {
 const pressedKeys = new Set();
 
 document.addEventListener("keydown", (e) => {
-    // Ne pas capter les touches quand l'écran de jeu n'est pas affiché
-    // (permet notamment d'utiliser les flèches dans le champ pseudo)
+
     if (gameScreen.classList.contains("hidden")) return;
 
     if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
         e.preventDefault();
     }
+
     const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+
+    // PC ouvert
+    if (pcOpen) {
+
+        if (key === "e" || key === "Escape") {
+            closePC();
+        }
+
+        return;
+    }
+
+    // Interaction avec le PC
+    if (key === "e") {
+        checkPCInteraction();
+        return;
+    }
+
     pressedKeys.add(key);
 });
 
@@ -657,11 +684,6 @@ function tryMove(dx, dy, direction) {
         return;
     }
 
-
-    // =========================
-    // INTÉRIEUR DU CENTRE
-    // =========================
-
     if (currentMap === "center") {
 
         if (
@@ -686,6 +708,23 @@ function tryMove(dx, dy, direction) {
         player.targetPixelY = newY * TILE_SIZE;
 
         player.moving = true;
+    }
+}
+
+function checkPCInteraction() {
+
+    if (currentMap !== "center") return;
+    if (player.moving) return;
+
+    const pcX = 15;
+    const pcY = 7;
+
+    const distance =
+        Math.abs(player.tileX - pcX) +
+        Math.abs(player.tileY - pcY);
+
+    if (distance === 1) {
+        openPC();
     }
 }
 
@@ -939,6 +978,166 @@ function drawCenterInterior() {
     );
 
     ctx.textAlign = "left";
+
+    // =========================
+    // PC DE STOCKAGE
+    // =========================
+
+    const pcX = 15 * TILE_SIZE;
+    const pcY = 7 * TILE_SIZE;
+
+    // meuble
+    ctx.fillStyle = "#374151";
+    ctx.fillRect(
+        pcX + 2,
+        pcY + 10,
+        28,
+        22
+    );
+
+    // écran
+    ctx.fillStyle = "#111827";
+    ctx.fillRect(
+        pcX + 3,
+        pcY - 12,
+        26,
+        22
+    );
+
+    // écran bleu
+    ctx.fillStyle = "#60a5fa";
+    ctx.fillRect(
+        pcX + 6,
+        pcY - 9,
+        20,
+        16
+    );
+
+    // clavier
+    ctx.fillStyle = "#d1d5db";
+    ctx.fillRect(
+        pcX + 6,
+        pcY + 13,
+        20,
+        5
+    );
+
+    // pied
+    ctx.fillStyle = "#4b5563";
+    ctx.fillRect(
+        pcX + 11,
+        pcY + 32,
+        10,
+        5
+    );
+}
+
+function openPC() {
+
+    pcOpen = true;
+
+    const pcWindow = document.createElement("div");
+
+    pcWindow.id = "pcWindow";
+
+    pcWindow.innerHTML = `
+        <div class="pc-box">
+
+            <div class="pc-header">
+                <h2>🖥️ PC</h2>
+                <button id="closePCButton">✕</button>
+            </div>
+
+            <h3>📦 Créatures stockées</h3>
+
+            <div id="storageList"></div>
+
+            <p class="pc-hint">
+                Appuie sur <strong>E</strong> ou <strong>Échap</strong> pour fermer
+            </p>
+
+        </div>
+    `;
+
+    document.body.appendChild(pcWindow);
+
+    document
+        .getElementById("closePCButton")
+        .addEventListener("click", closePC);
+
+    updateStorageDisplay();
+}
+
+function closePC() {
+
+    pcOpen = false;
+
+    const pcWindow = document.getElementById("pcWindow");
+
+    if (pcWindow) {
+        pcWindow.remove();
+    }
+}
+function updateStorageDisplay() {
+
+    const storageList = document.getElementById("storageList");
+
+    if (!storageList) return;
+
+    storageList.innerHTML = "";
+
+    if (currentPlayer.storage.length === 0) {
+
+        storageList.innerHTML = `
+            <div class="empty-storage">
+                📦 Aucune créature dans le stockage.
+            </div>
+        `;
+
+        return;
+    }
+
+    currentPlayer.storage.forEach((creature, index) => {
+
+        const card = document.createElement("div");
+
+        card.className = "storage-creature";
+
+        const hpPercent = Math.max(
+            0,
+            Math.min(
+                100,
+                (creature.hp / creature.maxHp) * 100
+            )
+        );
+
+        card.innerHTML = `
+            <img
+                src="fakemon_creatures/${String(creature.id).padStart(3, "0")}.png"
+                alt="${creature.name}"
+            >
+
+            <div class="storage-info">
+
+                <strong>${creature.name}</strong>
+
+                <span>Type : ${creature.type}</span>
+
+                <span>Nv. ${creature.level}</span>
+
+                <div class="storage-hp">
+                    <div style="width: ${hpPercent}%"></div>
+                </div>
+
+                <small>
+                    ${creature.hp}/${creature.maxHp} PV
+                </small>
+
+            </div>
+        `;
+
+        storageList.appendChild(card);
+    });
 }
 
 // ===================== RENDU =====================
