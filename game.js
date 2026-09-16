@@ -308,7 +308,16 @@ function openCreatureMenu(index) {
 
 function setActiveCreature(index) {
 
-    if (!currentPlayer.team[index]) return;
+    const creature = currentPlayer.team[index];
+
+    if (!creature) return;
+
+    if (creature.hp <= 0) {
+        alert(
+            `${creature.name} est K.O. ! Elle doit être soignée avant de devenir la créature principale.`
+        );
+        return;
+    }
 
     currentPlayer.activeCreature = index;
 
@@ -318,7 +327,7 @@ function setActiveCreature(index) {
     closeCreatureMenu();
 
     alert(
-        `${currentPlayer.team[index].name} est maintenant ta créature principale !`
+        `${creature.name} est maintenant ta créature principale !`
     );
 }
 
@@ -1519,6 +1528,7 @@ function startBattle(wild) {
             <div class="battle-actions" id="battleActions">
                 <button id="battleAttackButton">⚔️ Attaquer</button>
                 <button id="battleCaptureButton">🔴 Capturer</button>
+                <button id="battleHealButton">💊 Soigner</button>
                 <button id="battleFleeButton">🏃 Fuir</button>
             </div>
 
@@ -1534,6 +1544,10 @@ function startBattle(wild) {
     document
         .getElementById("battleCaptureButton")
         .addEventListener("click", playerCapture);
+
+    document
+        .getElementById("battleHealButton")
+        .addEventListener("click", usePotionInBattle);
 
     document
         .getElementById("battleFleeButton")
@@ -1579,6 +1593,76 @@ function renderBattle(final = false) {
             .getElementById("battleCloseButton")
             .addEventListener("click", closeBattle);
     }
+}
+
+function usePotionInBattle() {
+
+    if (!battlePlayerCreature) return;
+
+    if (battleEnded) return;
+
+    const potionIndex = currentPlayer.inventory.findIndex(
+        item => item.id === "potion"
+    );
+
+    if (potionIndex === -1) {
+        addBattleLog("❌ Tu n'as aucune potion !");
+        renderBattle();
+        return;
+    }
+
+    if (battlePlayerCreature.hp >= battlePlayerCreature.maxHp) {
+        addBattleLog(
+            `${battlePlayerCreature.name} a déjà tous ses PV !`
+        );
+        renderBattle();
+        return;
+    }
+
+    const oldHp = battlePlayerCreature.hp;
+
+    battlePlayerCreature.hp = Math.min(
+        battlePlayerCreature.maxHp,
+        battlePlayerCreature.hp + 20
+    );
+
+    const healed = battlePlayerCreature.hp - oldHp;
+
+    currentPlayer.inventory.splice(potionIndex, 1);
+
+    saveGame();
+
+    addBattleLog(
+        `💊 ${battlePlayerCreature.name} récupère ${healed} PV !`
+    );
+
+    renderBattle();
+
+    // Le Pokémon sauvage attaque après l'utilisation de la potion
+    setTimeout(() => {
+
+        if (battleEnded) return;
+
+        wildAttack();
+
+    }, 700);
+}
+
+function wildAttack() {
+
+    if (!battleOpen || battleEnded) return;
+
+    const wild = battleWildCreature;
+    const player = battlePlayerCreature;
+
+    applyAttack(wild, player);
+
+    if (player.hp <= 0) {
+        finishBattleLose();
+        return;
+    }
+
+    renderBattle();
 }
 
 function playerAttack() {
