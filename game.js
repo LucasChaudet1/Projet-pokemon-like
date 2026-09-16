@@ -38,8 +38,29 @@ const WILD_ENCOUNTER_CHANCE = 0.12;
 const WILD_MIN_LEVEL = 2;
 const WILD_MAX_LEVEL = 6;
 
+// Espèces obtenues uniquement par évolution (jamais rencontrées à l'état sauvage)
+const EVOLVED_SPECIES = [
+    { id: 2, name: "Braisor", type: "Feu" },
+    { id: 3, name: "Vulcanor", type: "Feu" },
+    { id: 5, name: "Salaflore", type: "Plante" },
+    { id: 6, name: "Saladraxe", type: "Plante" },
+    { id: 8, name: "Aqualon", type: "Eau" },
+    { id: 9, name: "Aquatitan", type: "Eau" }
+];
+
 // Toutes les espèces pouvant apparaître dans le jeu (pour le Pokédex)
-const ALL_SPECIES = [...STARTER_CREATURES, ...WILD_CREATURES];
+const ALL_SPECIES = [...STARTER_CREATURES, ...WILD_CREATURES, ...EVOLVED_SPECIES];
+
+// Chaînes d'évolution : id de l'espèce de base -> id de l'espèce suivante + niveau requis
+const EVOLUTIONS = {
+    1: { id: 2, level: 16 },
+    2: { id: 3, level: 32 },
+    4: { id: 5, level: 16 },
+    5: { id: 6, level: 32 },
+    7: { id: 8, level: 16 },
+    8: { id: 9, level: 32 },
+    10: { id: 11, level: 18 }
+};
 
 function getSpeciesInfo(id) {
     return ALL_SPECIES.find(species => species.id === id) || null;
@@ -1810,6 +1831,40 @@ function levelUpCreature(creature) {
     creature.attack += 1;
     creature.defense += 1;
     creature.speed += 1;
+
+    return tryEvolveCreature(creature);
+}
+
+// Fait évoluer la créature si son niveau atteint le seuil requis.
+// Change son id (donc son sprite), son nom, et lui donne un bonus de stats.
+// Retourne un message d'évolution, ou null si rien ne se passe.
+function tryEvolveCreature(creature) {
+    const evolution = EVOLUTIONS[creature.id];
+
+    if (!evolution || creature.level < evolution.level) {
+        return null;
+    }
+
+    const evolvedSpecies = getSpeciesInfo(evolution.id);
+
+    if (!evolvedSpecies) {
+        return null;
+    }
+
+    const oldName = creature.name;
+
+    creature.id = evolvedSpecies.id;
+    creature.name = evolvedSpecies.name;
+
+    creature.maxHp += 8;
+    creature.hp += 8;
+    creature.attack += 4;
+    creature.defense += 4;
+    creature.speed += 3;
+
+    markPokedexCaught(creature.id);
+
+    return `${oldName} évolue en ${creature.name} ! ✨`;
 }
 
 function gainXP(creature, amount) {
@@ -1820,8 +1875,15 @@ function gainXP(creature, amount) {
 
     while (creature.xp >= xpForNextLevel(creature.level)) {
         creature.xp -= xpForNextLevel(creature.level);
-        levelUpCreature(creature);
-        messages.push(`${creature.name} monte au niveau ${creature.level} !`);
+
+        const nameBeforeLevelUp = creature.name;
+        const evolutionMessage = levelUpCreature(creature);
+
+        messages.push(`${nameBeforeLevelUp} monte au niveau ${creature.level} !`);
+
+        if (evolutionMessage) {
+            messages.push(evolutionMessage);
+        }
     }
 
     return messages;
@@ -2187,11 +2249,12 @@ function finishBattleWin() {
 
     battleEnded = true;
 
+    const winnerName = battlePlayerCreature.name;
     const xpGain = battleWildCreature.level * 10;
     const levelUpMessages = gainXP(battlePlayerCreature, xpGain);
 
     addBattleLog(`${battleWildCreature.name} est K.O. !`);
-    addBattleLog(`${battlePlayerCreature.name} gagne ${xpGain} points d'expérience !`);
+    addBattleLog(`${winnerName} gagne ${xpGain} points d'expérience !`);
 
     levelUpMessages.forEach(addBattleLog);
 
