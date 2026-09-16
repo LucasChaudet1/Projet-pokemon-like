@@ -226,9 +226,256 @@ function updateTeamDisplay() {
             </div>
         `;
 
+        // Cliquer sur la créature
+        creatureDiv.addEventListener("click", () => {
+            openCreatureMenu(index);
+        });
+
         teamDisplay.appendChild(creatureDiv);
     });
 }
+
+function openCreatureMenu(index) {
+
+    const creature = currentPlayer.team[index];
+
+    if (!creature) return;
+
+    // Éviter plusieurs menus
+    const oldMenu = document.getElementById("creatureMenu");
+
+    if (oldMenu) {
+        oldMenu.remove();
+    }
+
+    const menu = document.createElement("div");
+
+    menu.id = "creatureMenu";
+
+    menu.innerHTML = `
+        <div class="creature-menu-box">
+
+            <div class="creature-menu-header">
+                <h2>${creature.name}</h2>
+                <button id="closeCreatureMenu">✕</button>
+            </div>
+
+            <img
+                class="creature-menu-sprite"
+                src="fakemon_creatures/${String(creature.id).padStart(3, "0")}.png"
+                alt="${creature.name}"
+            >
+
+            <p>
+                Type : ${creature.type}<br>
+                Niveau : ${creature.level}<br>
+                PV : ${creature.hp}/${creature.maxHp}
+            </p>
+
+            <div class="creature-menu-actions">
+
+                <button id="mainCreatureButton">
+                    ⭐ Devenir la créature principale
+                </button>
+
+                <button id="healCreatureButton">
+                    💊 Soigner
+                </button>
+
+            </div>
+
+        </div>
+    `;
+
+    document.body.appendChild(menu);
+
+    document
+        .getElementById("closeCreatureMenu")
+        .addEventListener("click", closeCreatureMenu);
+
+    document
+        .getElementById("mainCreatureButton")
+        .addEventListener("click", () => {
+            setActiveCreature(index);
+        });
+
+    document
+        .getElementById("healCreatureButton")
+        .addEventListener("click", () => {
+            openHealingMenu(index);
+        });
+}
+
+function setActiveCreature(index) {
+
+    if (!currentPlayer.team[index]) return;
+
+    currentPlayer.activeCreature = index;
+
+    updateTeamDisplay();
+    saveGame();
+
+    closeCreatureMenu();
+
+    alert(
+        `${currentPlayer.team[index].name} est maintenant ta créature principale !`
+    );
+}
+
+function openHealingMenu(index) {
+
+    const creature = currentPlayer.team[index];
+
+    if (!creature) return;
+
+    const menu = document.getElementById("creatureMenu");
+
+    if (!menu) return;
+
+    // Chercher les objets de soin disponibles
+    const healingItems = currentPlayer.inventory.filter(
+        item => item.id === "potion"
+    );
+
+    const actions = menu.querySelector(".creature-menu-actions");
+
+    if (!actions) return;
+
+
+    // Aucun objet de soin
+    if (healingItems.length === 0) {
+
+        actions.innerHTML = `
+            <p class="no-healing">
+                ❌ Tu n'as aucun objet de soin.
+            </p>
+
+            <button id="backCreatureMenu">
+                ◀ Retour
+            </button>
+        `;
+
+        document
+            .getElementById("backCreatureMenu")
+            .addEventListener("click", () => {
+
+                closeCreatureMenu();
+                openCreatureMenu(index);
+
+            });
+
+        return;
+    }
+
+
+    // Objets disponibles
+    actions.innerHTML = `
+        <h3>💊 Objets de soin</h3>
+
+        <button id="usePotionButton">
+            🧪 Potion (${healingItems.length})
+        </button>
+
+        <button id="backCreatureMenu">
+            ◀ Retour
+        </button>
+    `;
+
+
+    document
+        .getElementById("usePotionButton")
+        .addEventListener("click", () => {
+
+            usePotion(index);
+
+        });
+
+
+    document
+        .getElementById("backCreatureMenu")
+        .addEventListener("click", () => {
+
+            closeCreatureMenu();
+            openCreatureMenu(index);
+
+        });
+}
+
+
+function usePotion(index) {
+
+    const creature = currentPlayer.team[index];
+
+    if (!creature) return;
+
+
+    // Trouver une potion
+    const potionIndex = currentPlayer.inventory.findIndex(
+        item => item.id === "potion"
+    );
+
+    if (potionIndex === -1) {
+
+        alert("Tu n'as aucune potion !");
+
+        return;
+    }
+
+
+    // Créature déjà au maximum
+    if (creature.hp >= creature.maxHp) {
+
+        alert(
+            `${creature.name} a déjà tous ses PV !`
+        );
+
+        return;
+    }
+
+
+    const oldHp = creature.hp;
+
+
+    // La potion soigne 20 PV
+    creature.hp = Math.min(
+        creature.maxHp,
+        creature.hp + 20
+    );
+
+
+    const healed = creature.hp - oldHp;
+
+
+    // Retirer la potion de l'inventaire
+    currentPlayer.inventory.splice(
+        potionIndex,
+        1
+    );
+
+
+    updateTeamDisplay();
+    saveGame();
+
+
+    alert(
+        `${creature.name} récupère ${healed} PV !`
+    );
+
+
+    closeCreatureMenu();
+}
+
+
+function closeCreatureMenu() {
+
+    const menu = document.getElementById("creatureMenu");
+
+    if (menu) {
+        menu.remove();
+    }
+}
+
+
 
 function selectCreature(id, name, type) {
     const creature = createCreature(id, name, type, 5);
@@ -1498,7 +1745,14 @@ function stepToward(current, target, speed) {
 
 function updatePlayer() {
 
-    if (encounterOpen || dialogueOpen || battleOpen) return;
+    if (
+        encounterOpen ||
+        dialogueOpen ||
+        battleOpen ||
+        pcOpen
+    ) {
+        return;
+    }
 
     // =========================
     // JOUEUR EN DÉPLACEMENT
@@ -1777,6 +2031,7 @@ function drawCenterInterior() {
 function openPC() {
 
     pcOpen = true;
+    pressedKeys.clear();
 
     const pcWindow = document.createElement("div");
 
