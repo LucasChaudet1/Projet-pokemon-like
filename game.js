@@ -512,6 +512,125 @@ const NPCS = [
     }
 ];
 
+// Arènes, une par biome. L'ordre du tableau est l'ordre de progression :
+// chaque maître d'arène refuse de combattre tant que le précédent n'est pas battu.
+const GYMS = [
+    {
+        id: "gym_bourg_palette",
+        zone: "🏘️ Bourg Palette",
+        leaderName: "Léa",
+        badge: "Badge Bourgeon",
+        icon: "🌱",
+        color: "#3f8f3a",
+        doorX: 10,
+        doorY: 10,
+        lines: ["Bienvenue dans l'Arène Bourgeon ! Voyons ce que tu vaux."],
+        defeatedLine: "Ma médaille est à toi, dresseur !",
+        requiresGymId: null,
+        team: [
+            { speciesId: 10, level: 4 },
+            { speciesId: 16, level: 6 },
+            { speciesId: 36, level: 10 }
+        ],
+        reward: 100
+    },
+    {
+        id: "gym_lac_azur",
+        zone: "🌊 Lac Azur",
+        leaderName: "Yumi",
+        badge: "Badge Vague",
+        icon: "💧",
+        color: "#1f6fa8",
+        doorX: 2,
+        doorY: 22,
+        lines: ["L'Arène Vague t'attendait. Prête à plonger ?"],
+        defeatedLine: "Tu nages en plein succès, bravo !",
+        requiresGymId: "gym_bourg_palette",
+        team: [
+            { speciesId: 20, level: 4 },
+            { speciesId: 28, level: 6 },
+            { speciesId: 42, level: 10 }
+        ],
+        reward: 100
+    },
+    {
+        id: "gym_foret_sombre",
+        zone: "🌲 Forêt Sombre",
+        leaderName: "Elouan",
+        badge: "Badge Forêt",
+        icon: "🍃",
+        color: "#2f6b30",
+        doorX: 27,
+        doorY: 2,
+        lines: ["La forêt n'a aucun secret pour moi. Montre-moi ta force !"],
+        defeatedLine: "Impressionnant, la forêt t'accepte !",
+        requiresGymId: "gym_lac_azur",
+        team: [
+            { speciesId: 19, level: 10 },
+            { speciesId: 39, level: 12 },
+            { speciesId: 18, level: 16 }
+        ],
+        reward: 150
+    },
+    {
+        id: "gym_route_sablonneuse",
+        zone: "🏜️ Route Sablonneuse",
+        leaderName: "Karim",
+        badge: "Badge Dune",
+        icon: "🌵",
+        color: "#c99a4a",
+        doorX: 27,
+        doorY: 20,
+        lines: ["Le désert forge les champions. En es-tu un ?"],
+        defeatedLine: "Tu as la trempe d'un vrai champion du désert !",
+        requiresGymId: "gym_foret_sombre",
+        team: [
+            { speciesId: 21, level: 10 },
+            { speciesId: 24, level: 12 },
+            { speciesId: 60, level: 16 }
+        ],
+        reward: 150
+    },
+    {
+        id: "gym_zone_volcanique",
+        zone: "🌋 Zone Volcanique",
+        leaderName: "Ardan",
+        badge: "Badge Braise",
+        icon: "🔥",
+        color: "#c0392b",
+        doorX: 42,
+        doorY: 3,
+        lines: ["Sens la chaleur de l'Arène Braise !"],
+        defeatedLine: "Mes flammes s'inclinent devant toi !",
+        requiresGymId: "gym_route_sablonneuse",
+        team: [
+            { speciesId: 31, level: 18 },
+            { speciesId: 34, level: 20 },
+            { speciesId: 51, level: 24 }
+        ],
+        reward: 250
+    },
+    {
+        id: "gym_zone_arctique",
+        zone: "❄️ Zone Arctique",
+        leaderName: "Freya",
+        badge: "Badge Gel",
+        icon: "❄️",
+        color: "#4a90c9",
+        doorX: 42,
+        doorY: 20,
+        lines: ["Seuls les plus forts survivent à l'Arène Gel. Prêt ?"],
+        defeatedLine: "Tu as bravé le froid jusqu'au bout, respect !",
+        requiresGymId: "gym_zone_volcanique",
+        team: [
+            { speciesId: 15, level: 18 },
+            { speciesId: 23, level: 20 },
+            { speciesId: 54, level: 24 }
+        ],
+        reward: 250
+    }
+];
+
 let currentPlayer = {
     pseudo: "",
     team: [],
@@ -600,6 +719,18 @@ function createCreature(id, name, type, level = 5) {
         speed: 10
     };
 
+    // Les stats de base ci-dessus correspondent au niveau 5 (niveau de départ
+    // des starters). On les fait évoluer avec le niveau, avec les mêmes
+    // incréments que levelUpCreature(), pour qu'une créature créée directement
+    // à un niveau élevé (sauvage, dresseur, arène) soit aussi forte qu'une
+    // créature montée jusque-là niveau par niveau.
+    const levelDiff = level - 5;
+
+    const maxHp = base.maxHp + levelDiff * 2;
+    const attack = base.attack + levelDiff * 1;
+    const defense = base.defense + levelDiff * 1;
+    const speed = base.speed + levelDiff * 1;
+
     return {
         uid: Date.now() + Math.random(),
 
@@ -610,12 +741,12 @@ function createCreature(id, name, type, level = 5) {
         level,
         xp: 0,
 
-        maxHp: base.maxHp,
-        hp: base.maxHp,
+        maxHp,
+        hp: maxHp,
 
-        attack: base.attack,
-        defense: base.defense,
-        speed: base.speed,
+        attack,
+        defense,
+        speed,
 
         fainted: false,
 
@@ -1271,6 +1402,16 @@ const TILES = {
     CENTER_DOOR: {
         color: "#ffffff",
         walkable: true
+    },
+
+    GYM_WALL: {
+        color: "#8b5a2b",
+        walkable: false
+    },
+
+    GYM_DOOR: {
+        color: "#e8c15a",
+        walkable: true
     }
 };
 
@@ -1548,8 +1689,29 @@ function buildMap() {
     placeArcticZone(grid);
     placeEncounterThickets(grid);
     placeBushes(grid);
+    placeGyms(grid);
 
     return grid;
+}
+
+// Place le petit bâtiment de chaque arène (3 cases de mur + une porte) sur la carte
+function placeGyms(grid) {
+    GYMS.forEach(gym => {
+
+        // Bâtiment plein de 3 cases de large sur 3 de haut, comme le Centre Fakemon
+        for (let y = gym.doorY - 2; y <= gym.doorY; y++) {
+            for (let x = gym.doorX - 1; x <= gym.doorX + 1; x++) {
+                grid[y][x] = "GYM_WALL";
+            }
+        }
+
+        // Porte au milieu du mur du bas
+        grid[gym.doorY][gym.doorX] = "GYM_DOOR";
+
+        // Case d'accès devant la porte : toujours praticable, même si un
+        // rocher/pin/lave y avait été placé par la génération de la zone
+        grid[gym.doorY + 1][gym.doorX] = "PATH";
+    });
 }
 
 function getZoneName(x, y) {
@@ -1641,6 +1803,49 @@ function buildCenterMap() {
 
 centerMap = buildCenterMap();
 
+// Mêmes dimensions que le Centre Fakemon, pour que la salle remplisse
+// exactement le canvas (640x480) et garde le même style visuel.
+const GYM_COLS = CENTER_COLS;
+const GYM_ROWS = CENTER_ROWS;
+const GYM_LEADER_X = 10;
+const GYM_LEADER_Y = 3;
+
+let gymMap = [];
+let currentGymId = null;
+
+function buildGymMap() {
+
+    const grid = [];
+
+    for (let y = 0; y < GYM_ROWS; y++) {
+
+        const row = [];
+
+        for (let x = 0; x < GYM_COLS; x++) {
+
+            if (
+                x === 0 ||
+                x === GYM_COLS - 1 ||
+                y === 0 ||
+                y === GYM_ROWS - 1
+            ) {
+                row.push("GYM_WALL");
+            } else {
+                row.push("PATH");
+            }
+        }
+
+        grid.push(row);
+    }
+
+    // Porte de sortie
+    grid[GYM_ROWS - 1][Math.floor(GYM_COLS / 2)] = "GYM_DOOR";
+
+    return grid;
+}
+
+gymMap = buildGymMap();
+
 function enterCenter() {
 
     currentMap = "center";
@@ -1681,6 +1886,41 @@ function exitCenter() {
     setPlayerTile(7, 5);
 
     zoneLabel.textContent = "🏘️ Bourg Palette";
+
+    saveGame();
+}
+
+function enterGym(gym) {
+
+    currentMap = "gym";
+    currentGymId = gym.id;
+
+    player.tileX = GYM_LEADER_X;
+    player.tileY = GYM_ROWS - 2;
+
+    player.pixelX = player.tileX * TILE_SIZE;
+    player.pixelY = player.tileY * TILE_SIZE;
+
+    player.targetPixelX = player.pixelX;
+    player.targetPixelY = player.pixelY;
+
+    player.moving = false;
+
+    zoneLabel.textContent = `🏟️ Arène ${gym.leaderName}`;
+}
+
+function exitGym() {
+
+    const gym = GYMS.find(g => g.id === currentGymId);
+
+    currentMap = "world";
+    currentGymId = null;
+
+    if (gym) {
+        setPlayerTile(gym.doorX, gym.doorY + 1);
+    }
+
+    zoneLabel.textContent = getZoneName(player.tileX, player.tileY);
 
     saveGame();
 }
@@ -1758,9 +1998,9 @@ document.addEventListener("keydown", (e) => {
         return;
     }
 
-    // Interaction avec un PNJ ou le PC
+    // Interaction avec un PNJ, un maître d'arène ou le PC
     if (key === "e") {
-        if (!checkNPCInteraction()) {
+        if (!checkNPCInteraction() && !checkGymLeaderInteraction()) {
             checkPCInteraction();
         }
         return;
@@ -1831,6 +2071,38 @@ function tryMove(dx, dy, direction) {
         const tile = TILES[centerMap[newY][newX]];
 
         if (!tile.walkable) {
+            return;
+        }
+
+        player.tileX = newX;
+        player.tileY = newY;
+
+        player.targetPixelX = newX * TILE_SIZE;
+        player.targetPixelY = newY * TILE_SIZE;
+
+        player.moving = true;
+
+        return;
+    }
+
+    if (currentMap === "gym") {
+
+        if (
+            newX < 0 ||
+            newX >= GYM_COLS ||
+            newY < 0 ||
+            newY >= GYM_ROWS
+        ) {
+            return;
+        }
+
+        const tile = TILES[gymMap[newY][newX]];
+
+        if (!tile.walkable) {
+            return;
+        }
+
+        if (newX === GYM_LEADER_X && newY === GYM_LEADER_Y) {
             return;
         }
 
@@ -1974,7 +2246,14 @@ function resolveDialogueOutcome(npc) {
 
     } else if (npc.type === "battle") {
 
-        if (currentPlayer.defeatedTrainers.includes(npc.id)) {
+        if (npc.requiresGymId && !currentPlayer.defeatedTrainers.includes(npc.requiresGymId)) {
+
+            if (textEl) {
+                textEl.textContent =
+                    "Tu dois d'abord battre le maître de l'arène précédente avant de m'affronter !";
+            }
+
+        } else if (currentPlayer.defeatedTrainers.includes(npc.id)) {
 
             if (textEl) {
                 textEl.textContent =
@@ -2048,6 +2327,44 @@ function checkPCInteraction() {
     }
 }
 
+// Construit un objet "NPC" pour le maître de l'arène en cours, réutilisable
+// tel quel par le système de dialogue et de combat de dresseur existant.
+function buildGymLeaderNpc(gym) {
+    return {
+        id: gym.id,
+        name: gym.leaderName,
+        color: gym.color,
+        type: "battle",
+        icon: gym.icon,
+        lines: gym.lines,
+        defeatedLine: gym.defeatedLine,
+        requiresGymId: gym.requiresGymId,
+        team: gym.team,
+        reward: gym.reward,
+        badge: gym.badge
+    };
+}
+
+function checkGymLeaderInteraction() {
+
+    if (currentMap !== "gym") return false;
+    if (player.moving) return false;
+
+    const facing = getFacingTile();
+
+    if (facing.x !== GYM_LEADER_X || facing.y !== GYM_LEADER_Y) {
+        return false;
+    }
+
+    const gym = GYMS.find(g => g.id === currentGymId);
+
+    if (!gym) return false;
+
+    startDialogue(buildGymLeaderNpc(gym));
+
+    return true;
+}
+
 function checkBuildingInteraction() {
 
     if (player.moving) return;
@@ -2070,6 +2387,30 @@ function checkBuildingInteraction() {
         player.tileY === CENTER_ROWS - 1
     ) {
         exitCenter();
+        return;
+    }
+
+
+    // Entrée dans une arène
+    if (currentMap === "world") {
+
+        const gym = GYMS.find(
+            g => player.tileX === g.doorX && player.tileY === g.doorY
+        );
+
+        if (gym) {
+            enterGym(gym);
+            return;
+        }
+    }
+
+
+    // Sortie d'une arène
+    if (
+        currentMap === "gym" &&
+        player.tileY === GYM_ROWS - 1
+    ) {
+        exitGym();
     }
 }
 
@@ -2709,7 +3050,12 @@ function finishBattleWin() {
         }
 
         addBattleLog(`Tu as vaincu ${battleTrainer.name} !`);
-        addBattleLog(`Récompense du dresseur : ${trainerReward} 💰 !`);
+
+        if (battleTrainer.badge) {
+            addBattleLog(`Tu remportes le ${battleTrainer.badge} ! 🏅`);
+        }
+
+        addBattleLog(`Récompense : ${trainerReward} 💰 !`);
 
         updateMoneyDisplay();
     }
@@ -3140,6 +3486,148 @@ function drawCenterInterior() {
         10,
         5
     );
+}
+
+function drawGymInterior() {
+
+    const gym = GYMS.find(g => g.id === currentGymId);
+    const accent = gym ? gym.color : "#8b5a2b";
+
+    // Fond
+    ctx.fillStyle = "#e9eef5";
+    ctx.fillRect(
+        0,
+        0,
+        canvas.width,
+        canvas.height
+    );
+
+    // Sol en carreaux
+    for (let y = 1; y < GYM_ROWS - 1; y++) {
+
+        for (let x = 1; x < GYM_COLS - 1; x++) {
+
+            ctx.fillStyle =
+                (x + y) % 2 === 0
+                    ? "#f4f7fb"
+                    : "#e2e8f0";
+
+            ctx.fillRect(
+                x * TILE_SIZE,
+                y * TILE_SIZE,
+                TILE_SIZE,
+                TILE_SIZE
+            );
+        }
+    }
+
+
+    // Mur du haut, coloré selon l'arène
+    ctx.fillStyle = accent;
+
+    ctx.fillRect(
+        0,
+        0,
+        GYM_COLS * TILE_SIZE,
+        TILE_SIZE
+    );
+
+
+    // Podium du maître
+    ctx.fillStyle = accent;
+
+    ctx.fillRect(
+        7 * TILE_SIZE,
+        4 * TILE_SIZE,
+        6 * TILE_SIZE,
+        TILE_SIZE * 2
+    );
+
+
+    // Podium blanc
+    ctx.fillStyle = "#ffffff";
+
+    ctx.fillRect(
+        7 * TILE_SIZE,
+        4 * TILE_SIZE,
+        6 * TILE_SIZE,
+        8
+    );
+
+
+    // Plantes
+    drawCenterPlant(
+        3 * TILE_SIZE,
+        4 * TILE_SIZE
+    );
+
+    drawCenterPlant(
+        16 * TILE_SIZE,
+        4 * TILE_SIZE
+    );
+
+
+    // Emblème de l'arène
+    ctx.fillStyle = accent;
+
+    ctx.beginPath();
+
+    ctx.arc(
+        10 * TILE_SIZE,
+        9 * TILE_SIZE,
+        45,
+        0,
+        Math.PI * 2
+    );
+
+    ctx.fill();
+
+    ctx.fillStyle = "#ffffff";
+
+    ctx.beginPath();
+
+    ctx.arc(
+        10 * TILE_SIZE,
+        9 * TILE_SIZE,
+        30,
+        0,
+        Math.PI * 2
+    );
+
+    ctx.fill();
+
+    ctx.font = "24px Arial";
+    ctx.textAlign = "center";
+
+    ctx.fillText(
+        gym ? gym.icon : "🏟️",
+        10 * TILE_SIZE,
+        9 * TILE_SIZE + 8
+    );
+
+
+    // Maître d'arène
+    if (gym) {
+        drawNPC(
+            GYM_LEADER_X * TILE_SIZE,
+            GYM_LEADER_Y * TILE_SIZE,
+            buildGymLeaderNpc(gym)
+        );
+    }
+
+
+    // Texte
+    ctx.fillStyle = "#333";
+    ctx.font = "bold 18px Arial";
+    ctx.textAlign = "center";
+
+    ctx.fillText(
+        gym ? `ARÈNE ${gym.leaderName.toUpperCase()}` : "ARÈNE",
+        canvas.width / 2,
+        30
+    );
+
+    ctx.textAlign = "left";
 }
 
 function openPC() {
@@ -3961,6 +4449,63 @@ function drawTile(x, y, screenX, screenY) {
         ctx.moveTo(screenX + 4, screenY + TILE_SIZE / 2);
         ctx.lineTo(screenX + TILE_SIZE - 4, screenY + TILE_SIZE / 2);
         ctx.stroke();
+    } else if (tileKey === "GYM_WALL" || tileKey === "GYM_DOOR") {
+
+        const gym = GYMS.find(g =>
+            x >= g.doorX - 1 && x <= g.doorX + 1 &&
+            y >= g.doorY - 2 && y <= g.doorY
+        );
+
+        const accent = gym ? gym.color : "#8b5a2b";
+
+        // Façade colorée selon l'arène
+        ctx.fillStyle = accent;
+        ctx.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
+
+        if (tileKey === "GYM_DOOR") {
+
+            // Porte
+            ctx.fillStyle = "#3b2411";
+            ctx.fillRect(
+                screenX + 7,
+                screenY + 8,
+                TILE_SIZE - 14,
+                TILE_SIZE - 8
+            );
+
+        } else if (gym && x === gym.doorX && y === gym.doorY - 2) {
+
+            // Enseigne au sommet du bâtiment
+            ctx.fillStyle = "#ffffff";
+            ctx.beginPath();
+            ctx.arc(
+                screenX + TILE_SIZE / 2,
+                screenY + TILE_SIZE / 2,
+                11,
+                0,
+                Math.PI * 2
+            );
+            ctx.fill();
+
+            ctx.font = "14px Arial";
+            ctx.textAlign = "center";
+            ctx.fillText(
+                gym.icon,
+                screenX + TILE_SIZE / 2,
+                screenY + TILE_SIZE / 2 + 5
+            );
+            ctx.textAlign = "left";
+
+        } else {
+
+            // Ligne de brique légère sur les autres murs
+            ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(screenX, screenY + TILE_SIZE / 2);
+            ctx.lineTo(screenX + TILE_SIZE, screenY + TILE_SIZE / 2);
+            ctx.stroke();
+        }
     }
 }
 
@@ -4051,6 +4596,19 @@ function updateZoneLabel() {
         return;
     }
 
+    if (currentMap === "gym") {
+
+        const gym = GYMS.find(g => g.id === currentGymId);
+        const label = gym ? `🏟️ Arène ${gym.leaderName}` : "🏟️ Arène";
+
+        if (lastZone !== label) {
+            zoneLabel.textContent = label;
+            lastZone = label;
+        }
+
+        return;
+    }
+
 
     const zone = getZoneName(
         player.tileX,
@@ -4081,6 +4639,30 @@ function render() {
         );
 
         drawCenterInterior();
+
+        drawPlayer(
+            player.pixelX,
+            player.pixelY
+        );
+
+        return;
+    }
+
+
+    // =========================
+    // INTÉRIEUR D'UNE ARÈNE
+    // =========================
+
+    if (currentMap === "gym") {
+
+        ctx.clearRect(
+            0,
+            0,
+            canvas.width,
+            canvas.height
+        );
+
+        drawGymInterior();
 
         drawPlayer(
             player.pixelX,
