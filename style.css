@@ -98,6 +98,31 @@ body {
     font-weight: bold;
 }
 
+/* Bouton du Pokédex */
+
+.pokedex-button {
+    position: absolute;
+
+    top: 68px;
+    left: 20px;
+
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+
+    border: none;
+    padding: 8px 14px;
+
+    border-radius: 8px;
+
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.pokedex-button:hover {
+    background: rgba(0, 0, 0, 0.85);
+}
+
 /* Cacher un élément */
 
 .hidden {
@@ -487,6 +512,90 @@ body {
 
 
 /* =========================
+   POKÉDEX
+   ========================= */
+
+#pokedexWindow {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+
+    display: flex;
+    justify-content: center;
+    align-items: center;
+
+    background: rgba(0, 0, 0, 0.65);
+
+    z-index: 9999;
+}
+
+.pokedex-progress {
+    margin: 0 0 16px;
+    color: #4b5563;
+    font-weight: bold;
+}
+
+#pokedexList {
+    display: grid;
+
+    grid-template-columns: repeat(2, 1fr);
+
+    gap: 12px;
+}
+
+.pokedex-entry {
+    display: flex;
+    align-items: center;
+
+    gap: 12px;
+
+    padding: 10px;
+
+    background: white;
+
+    border: 2px solid #d1d5db;
+    border-radius: 10px;
+}
+
+.pokedex-entry img {
+    width: 64px;
+    height: 64px;
+
+    object-fit: contain;
+}
+
+.pokedex-entry.seen-only img {
+    filter: grayscale(100%) brightness(0.5);
+}
+
+.pokedex-info {
+    display: flex;
+    flex-direction: column;
+
+    gap: 3px;
+}
+
+.pokedex-info strong {
+    font-size: 16px;
+}
+
+.pokedex-status {
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.pokedex-entry.caught .pokedex-status {
+    color: #16a34a;
+}
+
+.pokedex-entry.seen-only .pokedex-status {
+    color: #6b7280;
+}
+
+
+/* =========================
    RENCONTRE SAUVAGE
    ========================= */
 
@@ -818,11 +927,13 @@ body {
     background: #3b75c9;
 }
 
-#battleFleeButton {
+#battleFleeButton,
+#battleMoveBackButton {
     background: #6b7280;
 }
 
-#battleFleeButton:hover {
+#battleFleeButton:hover,
+#battleMoveBackButton:hover {
     background: #4b5563;
 }
 

@@ -8,6 +8,7 @@ const startButton = document.getElementById("startButton");
 const playerName = document.getElementById("playerName");
 const teamDisplay = document.getElementById("teamDisplay");
 const creatureSelection = document.getElementById("creatureSelection");
+const pokedexButton = document.getElementById("pokedexButton");
 
 const zoneLabel = document.getElementById("zoneLabel");
 const canvas = document.getElementById("gameCanvas");
@@ -35,6 +36,57 @@ const WILD_CREATURES = [
 const WILD_ENCOUNTER_CHANCE = 0.12;
 const WILD_MIN_LEVEL = 2;
 const WILD_MAX_LEVEL = 6;
+
+// Toutes les espèces pouvant apparaître dans le jeu (pour le Pokédex)
+const ALL_SPECIES = [...STARTER_CREATURES, ...WILD_CREATURES];
+
+function getSpeciesInfo(id) {
+    return ALL_SPECIES.find(species => species.id === id) || null;
+}
+
+function markPokedexSeen(id) {
+    if (!currentPlayer.pokedex.seen.includes(id)) {
+        currentPlayer.pokedex.seen.push(id);
+    }
+}
+
+function markPokedexCaught(id) {
+    markPokedexSeen(id);
+
+    if (!currentPlayer.pokedex.caught.includes(id)) {
+        currentPlayer.pokedex.caught.push(id);
+    }
+}
+
+// Attaques apprises par une créature selon son type
+const MOVE_POOL = {
+    Feu: [
+        { name: "Griffe", power: 1 },
+        { name: "Lance-Flammes", power: 1.35 }
+    ],
+    Plante: [
+        { name: "Charge", power: 1 },
+        { name: "Tranch'Herbe", power: 1.35 }
+    ],
+    Eau: [
+        { name: "Charge", power: 1 },
+        { name: "Pistolet à O", power: 1.35 }
+    ],
+    Normal: [
+        { name: "Charge", power: 1 },
+        { name: "Griffe", power: 1.15 }
+    ]
+};
+
+function getMovesForType(type) {
+    const moves = MOVE_POOL[type] || MOVE_POOL.Normal;
+    return moves.map(move => ({ ...move }));
+}
+
+function pickRandomMove(creature) {
+    if (!creature.attacks || creature.attacks.length === 0) return null;
+    return creature.attacks[Math.floor(Math.random() * creature.attacks.length)];
+}
 
 // Personnages non-joueurs du village
 const NPCS = [
@@ -86,12 +138,14 @@ let currentPlayer = {
     inventory: [],
     npcGifts: [],
     activeCreature: 0,
-    position: null
+    position: null,
+    pokedex: { seen: [], caught: [] }
 };
 
 const MAX_TEAM_SIZE = 6;
 
 startButton.addEventListener("click", startGame);
+pokedexButton.addEventListener("click", openPokedex);
 
 function startGame() {
     const pseudo = pseudoInput.value.trim();
@@ -182,7 +236,7 @@ function createCreature(id, name, type, level = 5) {
 
         fainted: false,
 
-        attacks: []
+        attacks: getMovesForType(type)
     };
 }
 
@@ -492,6 +546,8 @@ function selectCreature(id, name, type) {
     currentPlayer.team = [creature];
     currentPlayer.activeCreature = 0;
 
+    markPokedexCaught(creature.id);
+
     playerName.textContent = "👤 " + currentPlayer.pseudo;
 
     updateTeamDisplay();
@@ -568,6 +624,37 @@ function loadGame() {
 
         delete currentPlayer.creature;
     }
+
+
+    // =========================
+    // ATTAQUES (anciennes sauvegardes)
+    // =========================
+
+    [...currentPlayer.team, ...currentPlayer.storage].forEach(creature => {
+        if (!creature.attacks || creature.attacks.length === 0) {
+            creature.attacks = getMovesForType(creature.type);
+        }
+    });
+
+
+    // =========================
+    // POKÉDEX (anciennes sauvegardes)
+    // =========================
+
+    if (!currentPlayer.pokedex) {
+        currentPlayer.pokedex = { seen: [], caught: [] };
+    }
+
+    if (!Array.isArray(currentPlayer.pokedex.seen)) {
+        currentPlayer.pokedex.seen = [];
+    }
+
+    if (!Array.isArray(currentPlayer.pokedex.caught)) {
+        currentPlayer.pokedex.caught = [];
+    }
+
+    currentPlayer.team.forEach(creature => markPokedexCaught(creature.id));
+    currentPlayer.storage.forEach(creature => markPokedexCaught(creature.id));
 
 
     // =========================
@@ -1090,6 +1177,7 @@ let player = {
 let currentMap = "world";
 
 let pcOpen = false;
+let pokedexOpen = false;
 
 let encounterOpen = false;
 let wildEncounterCreature = null;
@@ -1237,6 +1325,16 @@ document.addEventListener("keydown", (e) => {
 
         if (key === "e" || key === "Escape") {
             closePC();
+        }
+
+        return;
+    }
+
+    // Pokédex ouvert
+    if (pokedexOpen) {
+
+        if (key === "e" || key === "Escape") {
+            closePokedex();
         }
 
         return;
@@ -1566,6 +1664,9 @@ function startEncounter() {
 
     const creature = wildEncounterCreature;
 
+    markPokedexSeen(creature.id);
+    saveGame();
+
     const encounterWindow = document.createElement("div");
 
     encounterWindow.id = "encounterWindow";
@@ -1681,9 +1782,10 @@ function computeCaptureChance(wild) {
     return Math.min(0.95, Math.max(0.05, chance));
 }
 
-function computeDamage(attacker, defender) {
+function computeDamage(attacker, defender, move) {
+    const power = move ? move.power : 1;
     const variance = 0.85 + Math.random() * 0.3;
-    const raw = (attacker.attack - defender.defense * 0.5) * variance;
+    const raw = (attacker.attack * power - defender.defense * 0.5) * variance;
     return Math.max(1, Math.round(raw));
 }
 
@@ -1691,10 +1793,13 @@ function addBattleLog(text) {
     battleLog.push(text);
 }
 
-function applyAttack(attacker, defender) {
-    const damage = computeDamage(attacker, defender);
+function applyAttack(attacker, defender, move) {
+    const damage = computeDamage(attacker, defender, move);
     defender.hp = Math.max(0, defender.hp - damage);
-    addBattleLog(`${attacker.name} inflige ${damage} dégâts à ${defender.name} !`);
+
+    const moveName = move ? move.name : "une attaque";
+
+    addBattleLog(`${attacker.name} utilise ${moveName} et inflige ${damage} dégâts à ${defender.name} !`);
 }
 
 function startBattle(wild) {
@@ -1740,21 +1845,33 @@ function startBattle(wild) {
 
             <div class="battle-log" id="battleLog"></div>
 
-            <div class="battle-actions" id="battleActions">
-                <button id="battleAttackButton">⚔️ Attaquer</button>
-                <button id="battleCaptureButton">🔴 Capturer</button>
-                <button id="battleHealButton">💊 Soigner</button>
-                <button id="battleFleeButton">🏃 Fuir</button>
-            </div>
+            <div class="battle-actions" id="battleActions"></div>
 
         </div>
     `;
 
     document.body.appendChild(battleWindow);
 
+    renderBattleActions();
+    renderBattle();
+}
+
+function renderBattleActions() {
+
+    const actionsEl = document.getElementById("battleActions");
+
+    if (!actionsEl) return;
+
+    actionsEl.innerHTML = `
+        <button id="battleAttackButton">⚔️ Attaquer</button>
+        <button id="battleCaptureButton">🔴 Capturer</button>
+        <button id="battleHealButton">💊 Soigner</button>
+        <button id="battleFleeButton">🏃 Fuir</button>
+    `;
+
     document
         .getElementById("battleAttackButton")
-        .addEventListener("click", playerAttack);
+        .addEventListener("click", openMoveMenu);
 
     document
         .getElementById("battleCaptureButton")
@@ -1767,8 +1884,36 @@ function startBattle(wild) {
     document
         .getElementById("battleFleeButton")
         .addEventListener("click", playerFlee);
+}
 
-    renderBattle();
+function openMoveMenu() {
+
+    if (!battleOpen || battleEnded) return;
+
+    const actionsEl = document.getElementById("battleActions");
+
+    if (!actionsEl) return;
+
+    const moves = battlePlayerCreature.attacks;
+
+    actionsEl.innerHTML =
+        moves.map((move, index) => `
+            <button class="battle-move-button" data-move-index="${index}">
+                ⚔️ ${move.name}
+            </button>
+        `).join("") +
+        `<button id="battleMoveBackButton">◀ Retour</button>`;
+
+    actionsEl.querySelectorAll(".battle-move-button").forEach(button => {
+
+        const move = moves[Number(button.dataset.moveIndex)];
+
+        button.addEventListener("click", () => playerAttack(move));
+    });
+
+    document
+        .getElementById("battleMoveBackButton")
+        .addEventListener("click", renderBattleActions);
 }
 
 function renderBattle(final = false) {
@@ -1870,7 +2015,7 @@ function wildAttack() {
     const wild = battleWildCreature;
     const player = battlePlayerCreature;
 
-    applyAttack(wild, player);
+    applyAttack(wild, player, pickRandomMove(wild));
 
     if (player.hp <= 0) {
         finishBattleLose();
@@ -1880,12 +2025,13 @@ function wildAttack() {
     renderBattle();
 }
 
-function playerAttack() {
+function playerAttack(move) {
 
     if (!battleOpen || battleEnded) return;
 
     const player = battlePlayerCreature;
     const wild = battleWildCreature;
+    const wildMove = pickRandomMove(wild);
 
     const playerFirst =
         player.speed === wild.speed
@@ -1894,14 +2040,14 @@ function playerAttack() {
 
     if (playerFirst) {
 
-        applyAttack(player, wild);
+        applyAttack(player, wild, move);
 
         if (wild.hp <= 0) {
             finishBattleWin();
             return;
         }
 
-        applyAttack(wild, player);
+        applyAttack(wild, player, wildMove);
 
         if (player.hp <= 0) {
             finishBattleLose();
@@ -1910,14 +2056,14 @@ function playerAttack() {
 
     } else {
 
-        applyAttack(wild, player);
+        applyAttack(wild, player, wildMove);
 
         if (player.hp <= 0) {
             finishBattleLose();
             return;
         }
 
-        applyAttack(player, wild);
+        applyAttack(player, wild, move);
 
         if (wild.hp <= 0) {
             finishBattleWin();
@@ -1926,6 +2072,7 @@ function playerAttack() {
     }
 
     renderBattle();
+    renderBattleActions();
 }
 
 function playerCapture() {
@@ -1944,7 +2091,7 @@ function playerCapture() {
 
     addBattleLog(`La capture a échoué... ${wild.name} riposte !`);
 
-    applyAttack(wild, battlePlayerCreature);
+    applyAttack(wild, battlePlayerCreature, pickRandomMove(wild));
 
     if (battlePlayerCreature.hp <= 0) {
         finishBattleLose();
@@ -2001,6 +2148,8 @@ function finishBattleCapture() {
 
     const captured = battleWildCreature;
 
+    markPokedexCaught(captured.id);
+
     if (currentPlayer.team.length < MAX_TEAM_SIZE) {
         currentPlayer.team.push(captured);
         updateTeamDisplay();
@@ -2048,7 +2197,8 @@ function updatePlayer() {
         encounterOpen ||
         dialogueOpen ||
         battleOpen ||
-        pcOpen
+        pcOpen ||
+        pokedexOpen
     ) {
         return;
     }
@@ -2374,6 +2524,112 @@ function closePC() {
         pcWindow.remove();
     }
 }
+
+function openPokedex() {
+
+    pokedexOpen = true;
+    pressedKeys.clear();
+
+    const pokedexWindow = document.createElement("div");
+
+    pokedexWindow.id = "pokedexWindow";
+
+    pokedexWindow.innerHTML = `
+        <div class="pc-box">
+
+            <div class="pc-header">
+                <h2>📖 Pokédex</h2>
+                <button id="closePokedexButton">✕</button>
+            </div>
+
+            <p class="pokedex-progress" id="pokedexProgress"></p>
+
+            <div id="pokedexList"></div>
+
+            <p class="pc-hint">
+                Appuie sur <strong>E</strong> ou <strong>Échap</strong> pour fermer
+            </p>
+
+        </div>
+    `;
+
+    document.body.appendChild(pokedexWindow);
+
+    document
+        .getElementById("closePokedexButton")
+        .addEventListener("click", closePokedex);
+
+    updatePokedexDisplay();
+}
+
+function closePokedex() {
+
+    pokedexOpen = false;
+
+    const pokedexWindow = document.getElementById("pokedexWindow");
+
+    if (pokedexWindow) {
+        pokedexWindow.remove();
+    }
+}
+
+function updatePokedexDisplay() {
+
+    const pokedexList = document.getElementById("pokedexList");
+    const pokedexProgress = document.getElementById("pokedexProgress");
+
+    if (!pokedexList || !pokedexProgress) return;
+
+    const seenIds = currentPlayer.pokedex.seen;
+    const caughtIds = currentPlayer.pokedex.caught;
+
+    pokedexProgress.textContent =
+        `${caughtIds.length} capturée(s) / ${seenIds.length} rencontrée(s) sur ${ALL_SPECIES.length} créatures`;
+
+    pokedexList.innerHTML = "";
+
+    if (seenIds.length === 0) {
+
+        pokedexList.innerHTML = `
+            <div class="empty-storage">
+                📖 Tu n'as encore rencontré aucune créature.
+            </div>
+        `;
+
+        return;
+    }
+
+    seenIds.forEach(id => {
+
+        const species = getSpeciesInfo(id);
+
+        if (!species) return;
+
+        const caught = caughtIds.includes(id);
+
+        const card = document.createElement("div");
+
+        card.className = `pokedex-entry ${caught ? "caught" : "seen-only"}`;
+
+        card.innerHTML = `
+            <img
+                src="fakemon_creatures/${String(species.id).padStart(3, "0")}.png"
+                alt="${species.name}"
+            >
+
+            <div class="pokedex-info">
+                <strong>${species.name}</strong>
+                <span>Type : ${species.type}</span>
+                <span class="pokedex-status">
+                    ${caught ? "✅ Capturé" : "👁️ Vu seulement"}
+                </span>
+            </div>
+        `;
+
+        pokedexList.appendChild(card);
+    });
+}
+
 function updateStorageDisplay() {
 
     const storageList = document.getElementById("storageList");
