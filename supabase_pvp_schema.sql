@@ -2,17 +2,19 @@
 --
 -- Comment l'utiliser :
 -- 1. Dans le dashboard Supabase de ton projet, ouvre l'onglet "SQL Editor".
--- 2. Colle tout ce fichier et clique sur "Run".
--- 3. C'est tout : la dernière instruction active le temps réel sur la
---    table, tu n'as rien d'autre à activer manuellement.
+-- 2. Colle tout ce fichier et clique sur "Run" (le script peut être relancé
+--    sans risque si tu l'as déjà exécuté une fois : "create table if not
+--    exists" et "drop policy if exists" le rendent rejouable).
+-- 3. C'est tout : les dernières instructions activent le temps réel sur les
+--    tables, tu n'as rien d'autre à activer manuellement.
 --
--- ⚠️ Sécurité : ce jeu n'a pas de système d'authentification (pas de
--- compte/mot de passe joueur), donc les règles RLS ci-dessous autorisent
--- n'importe qui possédant la clé "anon" (publique par nature) à lire et
--- écrire n'importe quelle partie. C'est très bien pour un projet scolaire
--- ou pour jouer entre amis, mais ce ne serait pas suffisant pour une mise
--- en production publique (il faudrait ajouter Supabase Auth et restreindre
--- chaque ligne à ses deux joueurs).
+-- ⚠️ Sécurité : les mots de passe des joueurs sont gérés par Supabase Auth
+-- (hachés, jamais stockés en clair), mais les tables ci-dessous restent
+-- lisibles/écrivables par n'importe qui possédant la clé "anon" (publique
+-- par nature), connecté ou non. C'est très bien pour un projet scolaire ou
+-- pour jouer entre amis, mais ce ne serait pas suffisant pour une mise en
+-- production publique (il faudrait restreindre chaque ligne aux deux
+-- joueurs concernés via auth.uid()).
 
 create table if not exists pvp_matches (
     code text primary key,
@@ -64,3 +66,43 @@ create policy "Suppression publique des parties" on pvp_matches
 -- Si tu obtiens une erreur du type "already member of publication", c'est
 -- normal (ça veut dire que c'est déjà activé) : ignore-la simplement.
 alter publication supabase_realtime add table pvp_matches;
+
+
+-- ==========================================================
+-- File d'attente pour la recherche automatique d'adversaire ("Rechercher
+-- un adversaire" dans le menu PvP). Chaque joueur en recherche y dépose une
+-- ligne ; dès qu'un autre joueur arrive, il la réclame et crée directement
+-- la partie dans pvp_matches ci-dessus.
+-- ==========================================================
+
+create table if not exists pvp_queue (
+    id bigint generated always as identity primary key,
+
+    pseudo text not null,
+    team jsonb not null,
+
+    status text not null default 'waiting', -- waiting | matched
+    match_code text,
+
+    created_at timestamptz not null default now()
+);
+
+alter table pvp_queue enable row level security;
+
+drop policy if exists "Lecture publique de la file PvP" on pvp_queue;
+create policy "Lecture publique de la file PvP" on pvp_queue
+    for select using (true);
+
+drop policy if exists "Creation publique dans la file PvP" on pvp_queue;
+create policy "Creation publique dans la file PvP" on pvp_queue
+    for insert with check (true);
+
+drop policy if exists "Mise a jour publique de la file PvP" on pvp_queue;
+create policy "Mise a jour publique de la file PvP" on pvp_queue
+    for update using (true);
+
+drop policy if exists "Suppression publique de la file PvP" on pvp_queue;
+create policy "Suppression publique de la file PvP" on pvp_queue
+    for delete using (true);
+
+alter publication supabase_realtime add table pvp_queue;

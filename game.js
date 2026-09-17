@@ -2027,6 +2027,10 @@ let battleTrainerIndex = 0;
 let pvpOpen = false;
 let pvpMatch = null;
 
+// Recherche d'adversaire (matchmaking) : { rowId, channel } tant qu'on est
+// dans la file d'attente pvp_queue, null sinon.
+let pvpSearch = null;
+
 const CENTER_COLS = 20;
 const CENTER_ROWS = 15;
 
@@ -2255,10 +2259,11 @@ document.addEventListener("keydown", (e) => {
     }
 
     // Menu ou combat PvP ouvert (le déplacement est bloqué dans tous les cas ;
-    // Échap ne ferme que l'écran de création/connexion, jamais un combat en cours)
+    // Échap ne ferme que l'écran de création/connexion, jamais un combat ou
+    // une recherche d'adversaire en cours)
     if (pvpOpen) {
 
-        if (key === "Escape" && !pvpMatch) {
+        if (key === "Escape" && !pvpMatch && !pvpSearch) {
             closePvpMenu();
         }
 
@@ -3592,9 +3597,11 @@ function renderPvpMenuScreen() {
 
             <p class="pvp-intro">Affronte un autre joueur avec ton équipe (soignée pour l'occasion) !</p>
 
-            <button id="pvpCreateButton">🆕 Créer une partie</button>
+            <button id="pvpSearchButton">🔍 Rechercher un adversaire</button>
 
-            <div class="pvp-divider">— ou —</div>
+            <div class="pvp-divider">— ou, avec un code —</div>
+
+            <button id="pvpCreateButton">🆕 Créer une partie</button>
 
             <div class="pvp-join-row">
                 <input id="pvpCodeInput" maxlength="6" placeholder="CODE DE PARTIE">
@@ -3607,6 +3614,10 @@ function renderPvpMenuScreen() {
 
         </div>
     `;
+
+    document
+        .getElementById("pvpSearchButton")
+        .addEventListener("click", searchPvpOpponent);
 
     document
         .getElementById("pvpCreateButton")
@@ -3639,11 +3650,11 @@ function showPvpMenuError(message) {
     if (errorEl) errorEl.textContent = message;
 }
 
-// Ferme le menu PvP, mais jamais un combat en cours (évite de perdre la
-// partie par une fermeture accidentelle au clavier ou au clic).
+// Ferme le menu PvP, mais jamais un combat ou une recherche en cours (évite
+// de les perdre par une fermeture accidentelle au clavier ou au clic).
 function closePvpMenu() {
 
-    if (pvpMatch) return;
+    if (pvpMatch || pvpSearch) return;
 
     pvpOpen = false;
 
@@ -3768,6 +3779,246 @@ async function joinPvpRoom(rawCode) {
     subscribeToPvpMatch(code);
     openPvpBattleScreen();
     renderPvpBattle(updated);
+}
+
+// ==========================================================
+// Recherche d'adversaire (matchmaking)
+//
+// Table "pvp_queue" : chaque joueur en recherche y a une ligne
+// (pseudo + équipe). Dès qu'un joueur arrive et trouve une ligne plus
+// ancienne encore "waiting", il la "réclame" (update protégé par
+// .eq("status", "waiting"), comme la résolution de tour du combat PvP :
+// si deux joueurs tentent de réclamer la même ligne en même temps, un seul
+// réussit) puis crée directement la partie, déjà active avec les deux
+// équipes. Seul celui qui arrive APRÈS tente de réclamer quelqu'un ;
+// celui qui attend déjà reste passif et se contente d'écouter les
+// changements sur sa propre ligne. Ça évite que deux joueurs qui arrivent
+// en même temps ne se réclament mutuellement (ce qui créerait deux parties
+// séparées pour une seule paire de joueurs).
+//
+// Limite connue : si un joueur ferme son onglet pendant qu'il est dans la
+// file, sa ligne reste "waiting" jusqu'à ce qu'elle expire (on ignore les
+// lignes de plus de 2 minutes lors de la recherche) — un adversaire peut
+// donc, dans de rares cas, tomber sur quelqu'un qui ne répondra jamais
+// pendant jusqu'à 2 minutes avant qu'une ligne plus récente n'apparaisse.
+// ==========================================================
+
+const PVP_QUEUE_MAX_AGE_MS = 2 * 60 * 1000;
+
+async function searchPvpOpponent() {
+
+    const client = getSupabaseClient();
+
+    if (!client) return;
+
+    const searchButton = document.getElementById("pvpSearchButton");
+
+    if (searchButton) searchButton.disabled = true;
+
+    showPvpMenuError("");
+
+    const team = buildPvpTeamSnapshot();
+
+    const { data: ownRow, error } = await client
+        .from("pvp_queue")
+        .insert({
+            pseudo: currentPlayer.pseudo,
+            team,
+            status: "waiting"
+        })
+        .select()
+        .single();
+
+    if (error || !ownRow) {
+        console.error(error);
+        showPvpMenuError("Impossible de rejoindre la recherche d'adversaire.");
+        if (searchButton) searchButton.disabled = false;
+        return;
+    }
+
+    pvpSearch = { rowId: ownRow.id, channel: null };
+
+    renderPvpSearchingScreen();
+    subscribeToPvpQueueRow(ownRow.id);
+
+    await attemptMatchFromQueue(client, ownRow);
+}
+
+async function attemptMatchFromQueue(client, ownRow) {
+
+    // La recherche a pu être annulée (ou déjà résolue par l'autre joueur)
+    // pendant qu'on attendait la réponse de Supabase.
+    if (!pvpSearch || pvpSearch.rowId !== ownRow.id) return;
+
+    const cutoff = new Date(Date.now() - PVP_QUEUE_MAX_AGE_MS).toISOString();
+
+    const { data: candidates } = await client
+        .from("pvp_queue")
+        .select("*")
+        .eq("status", "waiting")
+        .gte("created_at", cutoff)
+        .order("created_at", { ascending: true })
+        .limit(5);
+
+    if (!candidates) return;
+
+    for (const opponentRow of candidates) {
+
+        if (opponentRow.id === ownRow.id) continue;
+        if (new Date(opponentRow.created_at) >= new Date(ownRow.created_at)) continue;
+
+        const matched = await claimQueueOpponent(client, ownRow, opponentRow);
+        if (matched) return;
+    }
+}
+
+async function claimQueueOpponent(client, ownRow, opponentRow) {
+
+    const code = generatePvpRoomCode();
+
+    const { data: claimed, error: claimError } = await client
+        .from("pvp_queue")
+        .update({ status: "matched", match_code: code })
+        .eq("id", opponentRow.id)
+        .eq("status", "waiting")
+        .select()
+        .single();
+
+    // Un autre joueur a réclamé cette ligne juste avant nous : pas grave,
+    // on essaiera le prochain candidat (ou on restera passif s'il n'y en a
+    // pas d'autre plus ancien que nous).
+    if (claimError || !claimed) return false;
+
+    const { data: matchRow, error: matchError } = await client
+        .from("pvp_matches")
+        .insert({
+            code,
+            status: "active",
+            player1_pseudo: currentPlayer.pseudo,
+            player1_team: buildPvpTeamSnapshot(),
+            player1_active: 0,
+            player1_pending: "move",
+            player2_pseudo: opponentRow.pseudo,
+            player2_team: opponentRow.team,
+            player2_active: 0,
+            player2_pending: "move"
+        })
+        .select()
+        .single();
+
+    await client.from("pvp_queue").delete().eq("id", ownRow.id);
+
+    if (matchError || !matchRow) {
+        console.error(matchError);
+        cleanupPvpSearch();
+        showPvpMenuError("Un adversaire a été trouvé mais la création de la partie a échoué, réessaie.");
+        renderPvpMenuScreen();
+        return true;
+    }
+
+    cleanupPvpSearch();
+
+    pvpMatch = { code, role: "player1", channel: null, row: matchRow };
+    subscribeToPvpMatch(code);
+    openPvpBattleScreen();
+    renderPvpBattle(matchRow);
+
+    return true;
+}
+
+function subscribeToPvpQueueRow(rowId) {
+
+    const client = getSupabaseClient();
+
+    if (!client || !pvpSearch) return;
+
+    const channel = client
+        .channel(`pvp-queue-${rowId}`)
+        .on(
+            "postgres_changes",
+            { event: "UPDATE", schema: "public", table: "pvp_queue", filter: `id=eq.${rowId}` },
+            (payload) => handlePvpQueueRowUpdate(payload.new)
+        )
+        .subscribe();
+
+    pvpSearch.channel = channel;
+}
+
+// Un autre joueur vient de nous réclamer : la partie existe déjà (créée
+// avant la mise à jour de notre ligne), on la récupère et on rejoint
+// directement le combat en tant que joueur 2.
+async function handlePvpQueueRowUpdate(row) {
+
+    if (!pvpSearch || row.id !== pvpSearch.rowId) return;
+    if (row.status !== "matched" || !row.match_code) return;
+
+    const code = row.match_code;
+    const client = getSupabaseClient();
+
+    cleanupPvpSearch();
+
+    if (!client) return;
+
+    pvpMatch = { code, role: "player2", channel: null, row: null };
+    subscribeToPvpMatch(code);
+
+    const { data: matchRow } = await client
+        .from("pvp_matches")
+        .select("*")
+        .eq("code", code)
+        .maybeSingle();
+
+    // Si la ligne n'existe pas encore (minuscule fenêtre de course entre la
+    // réclamation et la création de la partie), l'abonnement temps réel
+    // ci-dessus recevra l'insertion dans l'instant qui suit.
+    if (matchRow) {
+        handlePvpRowUpdate(matchRow);
+    }
+}
+
+async function cancelPvpSearch() {
+
+    const client = getSupabaseClient();
+
+    if (client && pvpSearch) {
+        await client.from("pvp_queue").delete().eq("id", pvpSearch.rowId);
+    }
+
+    cleanupPvpSearch();
+    renderPvpMenuScreen();
+}
+
+function cleanupPvpSearch() {
+
+    if (pvpSearch && pvpSearch.channel) {
+        const client = getSupabaseClient();
+        if (client) client.removeChannel(pvpSearch.channel);
+    }
+
+    pvpSearch = null;
+}
+
+function renderPvpSearchingScreen() {
+
+    const pvpWindow = document.getElementById("pvpWindow");
+
+    if (!pvpWindow || !pvpSearch) return;
+
+    pvpWindow.innerHTML = `
+        <div class="battle-box pvp-box">
+
+            <h2 class="battle-title">🔍 Recherche d'un adversaire...</h2>
+
+            <p class="pvp-hint">Le combat démarrera automatiquement dès qu'un autre joueur sera trouvé.</p>
+
+            <button id="pvpCancelSearchButton" class="pvp-secondary">Annuler la recherche</button>
+
+        </div>
+    `;
+
+    document
+        .getElementById("pvpCancelSearchButton")
+        .addEventListener("click", cancelPvpSearch);
 }
 
 function subscribeToPvpMatch(code) {
