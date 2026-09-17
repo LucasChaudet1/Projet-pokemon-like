@@ -23,9 +23,24 @@
             maxlength="15"
         >
 
+        <input
+            type="password"
+            id="passwordInput"
+            placeholder="Mot de passe"
+            maxlength="72"
+            class="hidden"
+        >
+
+        <p id="authError" class="auth-error"></p>
+
         <button id="startButton">
             COMMENCER
         </button>
+
+        <div id="authButtons" class="auth-buttons hidden">
+            <button id="loginButton">Se connecter</button>
+            <button id="registerButton">Créer un compte</button>
+        </div>
 
     </div>
 
@@ -53,6 +68,9 @@
             <div id="moneyDisplay" class="money-display"></div>
 
             <button id="pokedexButton" class="pokedex-button">📖 Pokédex</button>
+            <button id="pvpButton" class="pokedex-button pvp-button">⚔️ PvP</button>
+            <button id="tradeButton" class="pokedex-button trade-button">🔁 Échange</button>
+            <button id="logoutButton" class="pokedex-button logout-button hidden">🔓 Déconnexion</button>
 
             <div id="teamDisplay" class="team-display">
                 <!-- Équipe générée en JavaScript -->
@@ -70,6 +88,10 @@
 
     </div>
 
+
+    <!-- Client Supabase (nécessaire pour le compte joueur, le combat PvP et l'échange en ligne) -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+    <script src="supabase-config.js"></script>
 
     <script src="game.js"></script>
 </body>
