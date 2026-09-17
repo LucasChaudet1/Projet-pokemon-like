@@ -890,6 +890,14 @@ body {
     background: #9333ea;
 }
 
+.cheat-xp-button-remove {
+    background: #ef4444;
+}
+
+.cheat-xp-button-remove:hover {
+    background: #dc2626;
+}
+
 
 /* =========================
    RENCONTRE SAUVAGE

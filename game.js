@@ -3877,6 +3877,37 @@ function gainXP(creature, amount) {
     return messages;
 }
 
+// Inverse de gainXP : retire de l'XP et fait redescendre de niveau si besoin
+// (en annulant les bonus de stats donnés par levelUpCreature). Le niveau ne
+// descend jamais en dessous de 1, et l'XP ne devient jamais négative.
+function loseXP(creature, amount) {
+
+    creature.xp -= amount;
+
+    const messages = [];
+
+    while (creature.xp < 0 && creature.level > 1) {
+        creature.level--;
+        creature.xp += xpForNextLevel(creature.level);
+
+        creature.maxHp = Math.max(1, creature.maxHp - 2);
+        creature.hp = Math.min(creature.hp, creature.maxHp);
+        creature.attack = Math.max(1, creature.attack - 1);
+        creature.defense = Math.max(1, creature.defense - 1);
+        creature.speed = Math.max(1, creature.speed - 1);
+        creature.maxMp = Math.max(0, creature.maxMp - 3);
+        creature.mp = Math.min(creature.mp, creature.maxMp);
+
+        messages.push(`${creature.name} redescend au niveau ${creature.level}.`);
+    }
+
+    if (creature.xp < 0) {
+        creature.xp = 0;
+    }
+
+    return messages;
+}
+
 function computeCaptureChance(wild) {
 
     const hpFactor = 1 - wild.hp / wild.maxHp;
@@ -7547,6 +7578,10 @@ function updateCheatMenuDisplay() {
             <button class="cheat-xp-button" id="cheatXpButton${index}">
                 Donner XP
             </button>
+
+            <button class="cheat-xp-button cheat-xp-button-remove" id="cheatXpRemoveButton${index}">
+                Retirer XP
+            </button>
         `;
 
         cheatList.appendChild(card);
@@ -7555,6 +7590,12 @@ function updateCheatMenuDisplay() {
             .getElementById(`cheatXpButton${index}`)
             .addEventListener("click", () => {
                 giveCheatXp(index);
+            });
+
+        document
+            .getElementById(`cheatXpRemoveButton${index}`)
+            .addEventListener("click", () => {
+                removeCheatXp(index);
             });
     });
 }
@@ -7578,6 +7619,28 @@ function giveCheatXp(index) {
 
     if (levelUpMessages.length > 0) {
         alert(levelUpMessages.join("\n"));
+    }
+}
+
+function removeCheatXp(index) {
+
+    const creature = currentPlayer.team[index];
+
+    if (!creature) return;
+
+    const input = document.getElementById(`cheatXpInput${index}`);
+    const amount = input ? parseInt(input.value, 10) : NaN;
+
+    if (!amount || amount <= 0) return;
+
+    const levelDownMessages = loseXP(creature, amount);
+
+    updateTeamDisplay();
+    updateCheatMenuDisplay();
+    saveGame();
+
+    if (levelDownMessages.length > 0) {
+        alert(levelDownMessages.join("\n"));
     }
 }
 
