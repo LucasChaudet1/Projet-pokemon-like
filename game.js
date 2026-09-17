@@ -3,12 +3,19 @@ const creatureScreen = document.getElementById("creatureScreen");
 const gameScreen = document.getElementById("gameScreen");
 
 const pseudoInput = document.getElementById("pseudoInput");
+const passwordInput = document.getElementById("passwordInput");
+const authError = document.getElementById("authError");
+const authButtons = document.getElementById("authButtons");
+const loginButton = document.getElementById("loginButton");
+const registerButton = document.getElementById("registerButton");
 const startButton = document.getElementById("startButton");
 
 const playerName = document.getElementById("playerName");
 const teamDisplay = document.getElementById("teamDisplay");
 const creatureSelection = document.getElementById("creatureSelection");
 const pokedexButton = document.getElementById("pokedexButton");
+const pvpButton = document.getElementById("pvpButton");
+const logoutButton = document.getElementById("logoutButton");
 const moneyDisplay = document.getElementById("moneyDisplay");
 
 const zoneLabel = document.getElementById("zoneLabel");
@@ -648,6 +655,211 @@ const MAX_TEAM_SIZE = 6;
 
 startButton.addEventListener("click", startGame);
 pokedexButton.addEventListener("click", openPokedex);
+pvpButton.addEventListener("click", openPvpMenu);
+
+// ==========================================================
+// Client Supabase (backend partagé nécessaire pour le PvP — US19 —
+// et pour le compte joueur pseudo + mot de passe)
+//
+// SUPABASE_URL et SUPABASE_ANON_KEY viennent de supabase-config.js,
+// chargé avant game.js. Tant qu'ils gardent leur valeur d'exemple, le PvP
+// et le système de compte restent désactivés : le jeu se comporte comme
+// avant (pseudo libre, sauvegarde locale uniquement), sans rien casser
+// pour un joueur qui n'a pas configuré Supabase.
+// ==========================================================
+
+let supabaseClient = null;
+
+function isSupabaseConfigured() {
+    return (
+        typeof SUPABASE_URL === "string" &&
+        typeof SUPABASE_ANON_KEY === "string" &&
+        !SUPABASE_URL.includes("VOTRE-PROJET") &&
+        !SUPABASE_ANON_KEY.includes("VOTRE_CLE")
+    );
+}
+
+function getSupabaseClient() {
+    if (!isSupabaseConfigured()) return null;
+
+    if (!supabaseClient) {
+        supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    }
+
+    return supabaseClient;
+}
+
+// ==========================================================
+// Compte joueur (pseudo + mot de passe)
+//
+// Utilise Supabase Auth avec un e-mail "synthétique" dérivé du pseudo
+// (ex. "Sacha" -> "sacha@monsterquest.local"), pour n'exposer au joueur
+// qu'un formulaire pseudo + mot de passe. Supabase gère le hachage du
+// mot de passe et les sessions ; l'unicité de l'e-mail garantit au passage
+// l'unicité du pseudo.
+//
+// Ce compte sert uniquement à identifier le joueur (utile pour le PvP,
+// où il évite qu'un autre joueur usurpe un pseudo). La sauvegarde de
+// partie reste locale (localStorage), simplement isolée par compte via
+// une clé différente pour chaque utilisateur connecté.
+// ==========================================================
+
+let authUser = null;
+
+function pseudoToAuthEmail(pseudo) {
+    const slug = pseudo
+        .normalize("NFD")
+        .replace(/[̀-ͯ]/g, "")
+        .toLowerCase()
+        .replace(/[^a-z0-9_]/g, "");
+
+    return `${slug}@monsterquest.local`;
+}
+
+function showAuthError(message) {
+    authError.textContent = message;
+}
+
+function clearAuthError() {
+    authError.textContent = "";
+}
+
+function setAuthFormDisabled(disabled) {
+    loginButton.disabled = disabled;
+    registerButton.disabled = disabled;
+}
+
+function validatePseudoAndPassword(pseudo, password) {
+    if (pseudo.length < 3) {
+        showAuthError("Le pseudo doit faire au moins 3 caractères.");
+        return false;
+    }
+
+    if (pseudoToAuthEmail(pseudo).startsWith("@")) {
+        showAuthError("Ce pseudo doit contenir au moins une lettre ou un chiffre.");
+        return false;
+    }
+
+    if (password.length < 6) {
+        showAuthError("Le mot de passe doit faire au moins 6 caractères.");
+        return false;
+    }
+
+    return true;
+}
+
+async function registerWithPseudo() {
+
+    const client = getSupabaseClient();
+
+    if (!client) return;
+
+    clearAuthError();
+
+    const pseudo = pseudoInput.value.trim();
+    const password = passwordInput.value;
+
+    if (!validatePseudoAndPassword(pseudo, password)) return;
+
+    setAuthFormDisabled(true);
+
+    const { data, error } = await client.auth.signUp({
+        email: pseudoToAuthEmail(pseudo),
+        password,
+        options: { data: { pseudo } }
+    });
+
+    setAuthFormDisabled(false);
+
+    if (error) {
+        if (/registered|exists/i.test(error.message || "")) {
+            showAuthError("Ce pseudo est déjà pris.");
+        } else {
+            showAuthError("Impossible de créer le compte : " + error.message);
+        }
+        return;
+    }
+
+    if (!data.session) {
+        showAuthError(
+            "Compte créé, mais aucune session n'a été ouverte. " +
+            "Vérifie que la confirmation par e-mail est désactivée dans " +
+            "Authentication > Providers > Email sur ton projet Supabase, " +
+            "puis connecte-toi."
+        );
+        return;
+    }
+
+    onAuthSuccess(data.user);
+}
+
+async function loginWithPseudo() {
+
+    const client = getSupabaseClient();
+
+    if (!client) return;
+
+    clearAuthError();
+
+    const pseudo = pseudoInput.value.trim();
+    const password = passwordInput.value;
+
+    if (pseudo.length === 0 || password.length === 0) {
+        showAuthError("Entre ton pseudo et ton mot de passe.");
+        return;
+    }
+
+    setAuthFormDisabled(true);
+
+    const { data, error } = await client.auth.signInWithPassword({
+        email: pseudoToAuthEmail(pseudo),
+        password
+    });
+
+    setAuthFormDisabled(false);
+
+    if (error) {
+        showAuthError("Pseudo ou mot de passe incorrect.");
+        return;
+    }
+
+    onAuthSuccess(data.user);
+}
+
+function onAuthSuccess(user) {
+
+    authUser = user;
+    clearAuthError();
+
+    logoutButton.classList.remove("hidden");
+
+    const pseudo = (user.user_metadata && user.user_metadata.pseudo) || pseudoInput.value.trim();
+
+    loadGameForUser(user.id, pseudo);
+}
+
+async function logout() {
+
+    const client = getSupabaseClient();
+
+    if (client) {
+        await client.auth.signOut();
+    }
+
+    // Le moyen le plus sûr de repartir sur un état propre (équipe, carte,
+    // fenêtres ouvertes, etc.) est de recharger la page : le prochain
+    // initGame() retrouvera qu'il n'y a plus de session et réaffichera
+    // l'écran de connexion.
+    location.reload();
+}
+
+loginButton.addEventListener("click", loginWithPseudo);
+registerButton.addEventListener("click", registerWithPseudo);
+logoutButton.addEventListener("click", logout);
+
+passwordInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") loginWithPseudo();
+});
 
 function startGame() {
     const pseudo = pseudoInput.value.trim();
@@ -1096,8 +1308,16 @@ function addCreatureToTeam(creature) {
     return true;
 }
 
+// Sans compte (Supabase non configuré), la sauvegarde est unique par
+// navigateur. Une fois connecté (authUser défini), chaque compte a sa
+// propre clé, pour que deux comptes sur le même navigateur ne se marchent
+// pas dessus.
+function getSaveKey() {
+    return authUser ? `playerData:${authUser.id}` : "playerData";
+}
+
 function saveGame() {
-    localStorage.setItem("playerData", JSON.stringify(currentPlayer));
+    localStorage.setItem(getSaveKey(), JSON.stringify(currentPlayer));
     console.log("Partie sauvegardée:", currentPlayer);
 }
 
@@ -1106,6 +1326,28 @@ function loadGame() {
     const saved = localStorage.getItem("playerData");
 
     if (!saved) return;
+
+    applySavedGame(saved);
+}
+
+// Appelée après une connexion/inscription réussie : reprend la sauvegarde
+// de ce compte si elle existe, sinon démarre une nouvelle partie (sélection
+// de créature de départ) avec le pseudo du compte déjà rempli.
+function loadGameForUser(userId, pseudo) {
+
+    const saved = localStorage.getItem(`playerData:${userId}`);
+
+    if (saved) {
+        applySavedGame(saved);
+        return;
+    }
+
+    currentPlayer.pseudo = pseudo;
+    startScreen.classList.add("hidden");
+    showCreatureSelection();
+}
+
+function applySavedGame(saved) {
 
     currentPlayer = JSON.parse(saved);
 
@@ -1761,6 +2003,12 @@ let battleTrainer = null;
 let battleTrainerTeam = [];
 let battleTrainerIndex = 0;
 
+// Combat PvP (US19) : pvpOpen couvre à la fois le menu de création/connexion
+// et la fenêtre de combat en ligne. pvpMatch contient tout l'état de la
+// partie en cours (rôle, code, canal Supabase, dernière ligne connue).
+let pvpOpen = false;
+let pvpMatch = null;
+
 const CENTER_COLS = 20;
 const CENTER_ROWS = 15;
 
@@ -1993,6 +2241,17 @@ document.addEventListener("keydown", (e) => {
 
         if (key === "e" || key === "Escape") {
             closeShop();
+        }
+
+        return;
+    }
+
+    // Menu ou combat PvP ouvert (le déplacement est bloqué dans tous les cas ;
+    // Échap ne ferme que l'écran de création/connexion, jamais un combat en cours)
+    if (pvpOpen) {
+
+        if (key === "Escape" && !pvpMatch) {
+            closePvpMenu();
         }
 
         return;
@@ -3193,6 +3452,763 @@ function closeBattle() {
     if (battleWindow) {
         battleWindow.remove();
     }
+}
+
+// ==========================================================
+// Combat PvP en ligne (US19)
+//
+// Deux joueurs, chacun sur sa propre machine, s'affrontent en tour par
+// tour via une ligne partagée dans la table Supabase "pvp_matches". Les
+// deux clients écoutent les changements en temps réel sur cette ligne ;
+// dès que les deux actions du tour sont connues, N'IMPORTE LEQUEL des deux
+// clients calcule le résultat et l'écrit (l'update est protégé par
+// `.eq("turn", row.turn)`, donc si les deux clients tentent la résolution
+// en même temps, un seul réussit et l'autre devient un no-op silencieux).
+// Cela évite d'avoir besoin d'un vrai serveur de jeu tout en restant sûr
+// même si l'un des deux joueurs ferme son onglet en cours de partie.
+// ==========================================================
+
+const PVP_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+function generatePvpRoomCode() {
+    let code = "";
+
+    for (let i = 0; i < 6; i++) {
+        code += PVP_CODE_CHARS[Math.floor(Math.random() * PVP_CODE_CHARS.length)];
+    }
+
+    return code;
+}
+
+// Équipe "envoyée en combat" : une copie indépendante de l'équipe du joueur,
+// soignée au maximum (comme un combat officiel), pour ne jamais affecter
+// l'équipe réelle utilisée en exploration.
+function buildPvpTeamSnapshot() {
+    return currentPlayer.team.map(creature => ({
+        uid: creature.uid,
+        id: creature.id,
+        name: creature.name,
+        type: creature.type,
+        level: creature.level,
+        maxHp: creature.maxHp,
+        hp: creature.maxHp,
+        attack: creature.attack,
+        defense: creature.defense,
+        speed: creature.speed,
+        fainted: false,
+        attacks: creature.attacks
+    }));
+}
+
+function openPvpMenu() {
+
+    if (pvpOpen) return;
+
+    if (currentPlayer.team.length === 0) {
+        alert("Tu as besoin d'au moins une créature dans ton équipe pour affronter un autre joueur !");
+        return;
+    }
+
+    pvpOpen = true;
+    pressedKeys.clear();
+
+    const pvpWindow = document.createElement("div");
+    pvpWindow.id = "pvpWindow";
+    document.body.appendChild(pvpWindow);
+
+    renderPvpMenuScreen();
+}
+
+function renderPvpMenuScreen() {
+
+    const pvpWindow = document.getElementById("pvpWindow");
+
+    if (!pvpWindow) return;
+
+    if (!isSupabaseConfigured()) {
+        pvpWindow.innerHTML = `
+            <div class="battle-box pvp-box">
+                <h2 class="battle-title">⚔️ Combat en ligne (PvP)</h2>
+                <p>Le combat en ligne a besoin d'un backend partagé (Supabase) pour synchroniser les deux joueurs.</p>
+                <p>Configure <code>SUPABASE_URL</code> et <code>SUPABASE_ANON_KEY</code> dans <code>supabase-config.js</code>, exécute <code>supabase_pvp_schema.sql</code> dans ton projet Supabase, puis recharge la page.</p>
+                <button id="pvpCloseButton">Fermer</button>
+            </div>
+        `;
+
+        document.getElementById("pvpCloseButton").addEventListener("click", closePvpMenu);
+        return;
+    }
+
+    pvpWindow.innerHTML = `
+        <div class="battle-box pvp-box">
+
+            <h2 class="battle-title">⚔️ Combat en ligne (PvP)</h2>
+
+            <p class="pvp-intro">Affronte un autre joueur avec ton équipe (soignée pour l'occasion) !</p>
+
+            <button id="pvpCreateButton">🆕 Créer une partie</button>
+
+            <div class="pvp-divider">— ou —</div>
+
+            <div class="pvp-join-row">
+                <input id="pvpCodeInput" maxlength="6" placeholder="CODE DE PARTIE">
+                <button id="pvpJoinButton">Rejoindre</button>
+            </div>
+
+            <p id="pvpMenuError" class="pvp-error"></p>
+
+            <button id="pvpCloseButton" class="pvp-secondary">Fermer</button>
+
+        </div>
+    `;
+
+    document
+        .getElementById("pvpCreateButton")
+        .addEventListener("click", createPvpRoom);
+
+    document
+        .getElementById("pvpJoinButton")
+        .addEventListener("click", () => {
+            joinPvpRoom(document.getElementById("pvpCodeInput").value);
+        });
+
+    document
+        .getElementById("pvpCodeInput")
+        .addEventListener("keydown", (e) => {
+            e.stopPropagation();
+
+            if (e.key === "Enter") {
+                joinPvpRoom(document.getElementById("pvpCodeInput").value);
+            }
+        });
+
+    document
+        .getElementById("pvpCloseButton")
+        .addEventListener("click", closePvpMenu);
+}
+
+function showPvpMenuError(message) {
+    const errorEl = document.getElementById("pvpMenuError");
+
+    if (errorEl) errorEl.textContent = message;
+}
+
+// Ferme le menu PvP, mais jamais un combat en cours (évite de perdre la
+// partie par une fermeture accidentelle au clavier ou au clic).
+function closePvpMenu() {
+
+    if (pvpMatch) return;
+
+    pvpOpen = false;
+
+    const pvpWindow = document.getElementById("pvpWindow");
+
+    if (pvpWindow) pvpWindow.remove();
+}
+
+async function createPvpRoom() {
+
+    const client = getSupabaseClient();
+
+    if (!client) return;
+
+    const createButton = document.getElementById("pvpCreateButton");
+
+    if (createButton) createButton.disabled = true;
+
+    showPvpMenuError("");
+
+    const team = buildPvpTeamSnapshot();
+
+    for (let attempt = 0; attempt < 5; attempt++) {
+
+        const code = generatePvpRoomCode();
+
+        const { data, error } = await client
+            .from("pvp_matches")
+            .insert({
+                code,
+                status: "waiting",
+                player1_pseudo: currentPlayer.pseudo,
+                player1_team: team,
+                player1_active: 0,
+                player1_pending: "move"
+            })
+            .select()
+            .single();
+
+        if (!error && data) {
+            pvpMatch = { code, role: "player1", channel: null, row: data };
+            subscribeToPvpMatch(code);
+            renderPvpWaitingScreen();
+            return;
+        }
+
+        // Code déjà pris (contrainte unique sur "code") : on retente avec un autre code
+        if (error && error.code !== "23505") {
+            console.error(error);
+            showPvpMenuError("Impossible de créer la partie. Vérifie ta configuration Supabase.");
+            if (createButton) createButton.disabled = false;
+            return;
+        }
+    }
+
+    showPvpMenuError("Impossible de générer un code de partie, réessaie.");
+
+    if (createButton) createButton.disabled = false;
+}
+
+async function joinPvpRoom(rawCode) {
+
+    const client = getSupabaseClient();
+
+    if (!client) return;
+
+    const code = rawCode.trim().toUpperCase();
+
+    if (code.length === 0) {
+        showPvpMenuError("Entre un code de partie.");
+        return;
+    }
+
+    const joinButton = document.getElementById("pvpJoinButton");
+
+    if (joinButton) joinButton.disabled = true;
+
+    showPvpMenuError("");
+
+    const { data: existing, error: fetchError } = await client
+        .from("pvp_matches")
+        .select("*")
+        .eq("code", code)
+        .maybeSingle();
+
+    if (fetchError || !existing) {
+        showPvpMenuError("Partie introuvable. Vérifie le code.");
+        if (joinButton) joinButton.disabled = false;
+        return;
+    }
+
+    if (existing.status !== "waiting") {
+        showPvpMenuError("Cette partie a déjà commencé ou est terminée.");
+        if (joinButton) joinButton.disabled = false;
+        return;
+    }
+
+    const team = buildPvpTeamSnapshot();
+
+    const { data: updated, error: updateError } = await client
+        .from("pvp_matches")
+        .update({
+            player2_pseudo: currentPlayer.pseudo,
+            player2_team: team,
+            player2_active: 0,
+            player2_pending: "move",
+            status: "active",
+            updated_at: new Date().toISOString()
+        })
+        .eq("code", code)
+        .eq("status", "waiting")
+        .select()
+        .single();
+
+    if (updateError || !updated) {
+        showPvpMenuError("Cette partie vient d'être rejointe par quelqu'un d'autre.");
+        if (joinButton) joinButton.disabled = false;
+        return;
+    }
+
+    pvpMatch = { code, role: "player2", channel: null, row: updated };
+    subscribeToPvpMatch(code);
+    openPvpBattleScreen();
+    renderPvpBattle(updated);
+}
+
+function subscribeToPvpMatch(code) {
+
+    const client = getSupabaseClient();
+
+    if (!client || !pvpMatch) return;
+
+    const channel = client
+        .channel(`pvp-match-${code}`)
+        .on(
+            "postgres_changes",
+            { event: "*", schema: "public", table: "pvp_matches", filter: `code=eq.${code}` },
+            (payload) => {
+
+                if (!pvpMatch) return;
+
+                if (payload.eventType === "DELETE") {
+                    handlePvpMatchDeleted();
+                    return;
+                }
+
+                handlePvpRowUpdate(payload.new);
+            }
+        )
+        .subscribe();
+
+    pvpMatch.channel = channel;
+}
+
+function handlePvpMatchDeleted() {
+
+    if (!pvpMatch) return;
+
+    alert("La partie a été annulée par l'autre joueur.");
+    closePvpBattle();
+}
+
+function handlePvpRowUpdate(row) {
+
+    if (!pvpMatch || row.code !== pvpMatch.code) return;
+
+    pvpMatch.row = row;
+
+    if (row.status === "waiting") {
+        renderPvpWaitingScreen();
+        return;
+    }
+
+    // La partie vient de démarrer (le 2e joueur a rejoint) : on bascule sur
+    // l'écran de combat si ce n'est pas déjà fait (pertinent pour le créateur,
+    // qui était jusque-là sur l'écran d'attente).
+    if (!document.getElementById("pvpBattleBox")) {
+        openPvpBattleScreen();
+    }
+
+    renderPvpBattle(row);
+
+    if (row.status === "active") {
+        attemptResolvePvpTurn(row);
+    }
+}
+
+function renderPvpWaitingScreen() {
+
+    const pvpWindow = document.getElementById("pvpWindow");
+
+    if (!pvpWindow || !pvpMatch) return;
+
+    pvpWindow.innerHTML = `
+        <div class="battle-box pvp-box">
+
+            <h2 class="battle-title">⏳ En attente d'un adversaire...</h2>
+
+            <p>Partage ce code avec ton adversaire :</p>
+
+            <div class="pvp-code-display">${pvpMatch.code}</div>
+
+            <p class="pvp-hint">Le combat démarrera automatiquement dès qu'il/elle aura rejoint la partie.</p>
+
+            <button id="pvpCancelButton" class="pvp-secondary">Annuler la partie</button>
+
+        </div>
+    `;
+
+    document
+        .getElementById("pvpCancelButton")
+        .addEventListener("click", cancelPvpRoom);
+}
+
+async function cancelPvpRoom() {
+
+    const client = getSupabaseClient();
+
+    if (client && pvpMatch) {
+        await client.from("pvp_matches").delete().eq("code", pvpMatch.code);
+    }
+
+    closePvpBattle();
+}
+
+function openPvpBattleScreen() {
+
+    const pvpWindow = document.getElementById("pvpWindow");
+
+    if (!pvpWindow) return;
+
+    pvpWindow.innerHTML = `
+        <div class="battle-box pvp-box" id="pvpBattleBox">
+
+            <h2 class="battle-title" id="pvpBattleTitle">⚔️ Combat en ligne</h2>
+
+            <div class="battle-combatants">
+
+                <div class="battle-side">
+                    <img id="pvpMineSprite" class="battle-sprite" src="" alt="">
+                    <strong id="pvpMineName"></strong>
+                    <span id="pvpMineLevel"></span>
+                    <div class="battle-hp-bar"><div id="pvpMineHpFill" class="battle-hp-fill"></div></div>
+                    <small id="pvpMineHpText"></small>
+                </div>
+
+                <div class="battle-vs">VS</div>
+
+                <div class="battle-side">
+                    <img id="pvpOppSprite" class="battle-sprite" src="" alt="">
+                    <strong id="pvpOppName"></strong>
+                    <span id="pvpOppLevel"></span>
+                    <div class="battle-hp-bar"><div id="pvpOppHpFill" class="battle-hp-fill"></div></div>
+                    <small id="pvpOppHpText"></small>
+                </div>
+
+            </div>
+
+            <div class="battle-log" id="pvpLog"></div>
+
+            <div class="battle-actions" id="pvpActions"></div>
+
+        </div>
+    `;
+}
+
+function renderPvpBattle(row) {
+
+    if (!pvpMatch) return;
+
+    const isP1 = pvpMatch.role === "player1";
+
+    const myTeam = isP1 ? row.player1_team : row.player2_team;
+    const oppTeam = isP1 ? row.player2_team : row.player1_team;
+    const myActive = isP1 ? row.player1_active : row.player2_active;
+    const oppActive = isP1 ? row.player2_active : row.player1_active;
+    const myPseudo = isP1 ? row.player1_pseudo : row.player2_pseudo;
+    const oppPseudo = isP1 ? row.player2_pseudo : row.player1_pseudo;
+
+    const mine = myTeam[myActive];
+    const opp = oppTeam[oppActive];
+
+    document.getElementById("pvpBattleTitle").textContent = `⚔️ ${myPseudo} VS ${oppPseudo}`;
+
+    document.getElementById("pvpMineSprite").src =
+        `fakemon_creatures/${String(mine.id).padStart(3, "0")}.png`;
+    document.getElementById("pvpMineName").textContent = mine.name;
+    document.getElementById("pvpMineLevel").textContent = `Nv. ${mine.level}`;
+
+    const mineHpPercent = Math.max(0, Math.min(100, (mine.hp / mine.maxHp) * 100));
+    document.getElementById("pvpMineHpFill").style.width = `${mineHpPercent}%`;
+    document.getElementById("pvpMineHpText").textContent = `${mine.hp}/${mine.maxHp} PV`;
+
+    document.getElementById("pvpOppSprite").src =
+        `fakemon_creatures/${String(opp.id).padStart(3, "0")}.png`;
+    document.getElementById("pvpOppName").textContent = opp.name;
+    document.getElementById("pvpOppLevel").textContent = `Nv. ${opp.level}`;
+
+    const oppHpPercent = Math.max(0, Math.min(100, (opp.hp / opp.maxHp) * 100));
+    document.getElementById("pvpOppHpFill").style.width = `${oppHpPercent}%`;
+    document.getElementById("pvpOppHpText").textContent = `${opp.hp}/${opp.maxHp} PV`;
+
+    const logEl = document.getElementById("pvpLog");
+    logEl.innerHTML = (row.log || []).map(line => `<p>${line}</p>`).join("");
+    logEl.scrollTop = logEl.scrollHeight;
+
+    renderPvpActions(row, isP1, myPseudo, oppPseudo);
+}
+
+function renderPvpActions(row, isP1, myPseudo, oppPseudo) {
+
+    const actionsEl = document.getElementById("pvpActions");
+
+    if (!actionsEl) return;
+
+    if (row.status === "finished") {
+
+        let resultText;
+
+        if (row.winner === "draw") {
+            resultText = "🤝 Match nul !";
+        } else if ((row.winner === "player1") === isP1) {
+            resultText = "🏆 Tu as gagné le combat !";
+        } else {
+            resultText = "😵 Tu as perdu le combat...";
+        }
+
+        actionsEl.innerHTML = `
+            <p class="pvp-result">${resultText}</p>
+            <button id="pvpFinishCloseButton">Fermer</button>
+        `;
+
+        document
+            .getElementById("pvpFinishCloseButton")
+            .addEventListener("click", closePvpBattle);
+
+        return;
+    }
+
+    const myMove = isP1 ? row.player1_move : row.player2_move;
+    const myPending = isP1 ? row.player1_pending : row.player2_pending;
+    const oppPending = isP1 ? row.player2_pending : row.player1_pending;
+    const myTeam = isP1 ? row.player1_team : row.player2_team;
+    const myActiveIndex = isP1 ? row.player1_active : row.player2_active;
+
+    if (myMove) {
+        actionsEl.innerHTML = `<p class="pvp-waiting">En attente de ${oppPseudo}...</p>`;
+        return;
+    }
+
+    if (myPending === "switch") {
+
+        const aliveOptions = myTeam
+            .map((creature, index) => ({ creature, index }))
+            .filter(entry => entry.creature.hp > 0);
+
+        actionsEl.innerHTML =
+            `<p class="battle-switch-title">${myTeam[myActiveIndex].name} est K.O. ! Choisis ta prochaine créature :</p>` +
+            aliveOptions.map(({ creature, index }) => `
+                <button class="battle-switch-button" data-team-index="${index}">
+                    ${creature.name} (Nv. ${creature.level}) — ${creature.hp}/${creature.maxHp} PV
+                </button>
+            `).join("");
+
+        actionsEl.querySelectorAll(".battle-switch-button").forEach(button => {
+            const index = Number(button.dataset.teamIndex);
+            button.addEventListener("click", () => submitPvpSwitch(index));
+        });
+
+        return;
+    }
+
+    if (oppPending === "switch") {
+        actionsEl.innerHTML = `<p class="pvp-waiting">${oppPseudo} envoie une nouvelle créature...</p>`;
+        return;
+    }
+
+    const mine = myTeam[myActiveIndex];
+
+    actionsEl.innerHTML =
+        mine.attacks.map((move, index) => `
+            <button class="battle-move-button" data-move-index="${index}">
+                ⚔️ ${move.name}
+            </button>
+        `).join("") +
+        `<button id="pvpForfeitButton" class="pvp-secondary">🏳️ Abandonner</button>`;
+
+    actionsEl.querySelectorAll(".battle-move-button").forEach(button => {
+        const index = Number(button.dataset.moveIndex);
+        button.addEventListener("click", () => submitPvpAttack(index));
+    });
+
+    document
+        .getElementById("pvpForfeitButton")
+        .addEventListener("click", forfeitPvpMatch);
+}
+
+async function submitPvpAttack(moveIndex) {
+
+    const client = getSupabaseClient();
+
+    if (!client || !pvpMatch) return;
+
+    const field = pvpMatch.role === "player1" ? "player1_move" : "player2_move";
+
+    const actionsEl = document.getElementById("pvpActions");
+    if (actionsEl) actionsEl.innerHTML = `<p class="pvp-waiting">En attente de l'adversaire...</p>`;
+
+    await client
+        .from("pvp_matches")
+        .update({
+            [field]: { type: "attack", moveIndex },
+            updated_at: new Date().toISOString()
+        })
+        .eq("code", pvpMatch.code);
+}
+
+async function submitPvpSwitch(index) {
+
+    const client = getSupabaseClient();
+
+    if (!client || !pvpMatch) return;
+
+    const field = pvpMatch.role === "player1" ? "player1_move" : "player2_move";
+
+    const actionsEl = document.getElementById("pvpActions");
+    if (actionsEl) actionsEl.innerHTML = `<p class="pvp-waiting">En attente de l'adversaire...</p>`;
+
+    await client
+        .from("pvp_matches")
+        .update({
+            [field]: { type: "switch", index },
+            updated_at: new Date().toISOString()
+        })
+        .eq("code", pvpMatch.code);
+}
+
+async function forfeitPvpMatch() {
+
+    const client = getSupabaseClient();
+
+    if (!client || !pvpMatch) return;
+
+    if (!confirm("Abandonner le combat ?")) return;
+
+    const winner = pvpMatch.role === "player1" ? "player2" : "player1";
+    const myPseudo = pvpMatch.row[`${pvpMatch.role}_pseudo`];
+
+    await client
+        .from("pvp_matches")
+        .update({
+            status: "finished",
+            winner,
+            log: [...(pvpMatch.row.log || []), `${myPseudo} a abandonné le combat.`],
+            updated_at: new Date().toISOString()
+        })
+        .eq("code", pvpMatch.code)
+        .eq("status", "active");
+}
+
+// Calcule, à partir d'une ligne de combat, le prochain état si les deux
+// actions attendues ce tour-ci sont connues (sinon renvoie null : on attend
+// encore l'autre joueur). Fonction pure : ne lit/écrit rien elle-même.
+function computeNextPvpState(row) {
+
+    const p1SwitchNeeded = row.player1_pending === "switch";
+    const p2SwitchNeeded = row.player2_pending === "switch";
+    const isSwitchRound = p1SwitchNeeded || p2SwitchNeeded;
+
+    const p1Ready = p1SwitchNeeded
+        ? !!row.player1_move && row.player1_move.type === "switch"
+        : (isSwitchRound || (!!row.player1_move && row.player1_move.type === "attack"));
+
+    const p2Ready = p2SwitchNeeded
+        ? !!row.player2_move && row.player2_move.type === "switch"
+        : (isSwitchRound || (!!row.player2_move && row.player2_move.type === "attack"));
+
+    if (!p1Ready || !p2Ready) return null;
+
+    const team1 = row.player1_team.map(creature => ({ ...creature }));
+    const team2 = row.player2_team.map(creature => ({ ...creature }));
+
+    let active1 = row.player1_active;
+    let active2 = row.player2_active;
+
+    const log = [];
+
+    if (isSwitchRound) {
+
+        // Un ou deux joueurs viennent d'envoyer une nouvelle créature après
+        // un K.O. : aucun dégât n'est échangé ce tour-ci.
+        if (p1SwitchNeeded) {
+            active1 = row.player1_move.index;
+            log.push(`${row.player1_pseudo} envoie ${team1[active1].name} !`);
+        }
+
+        if (p2SwitchNeeded) {
+            active2 = row.player2_move.index;
+            log.push(`${row.player2_pseudo} envoie ${team2[active2].name} !`);
+        }
+
+    } else {
+
+        const a1 = team1[active1];
+        const a2 = team2[active2];
+        const move1 = a1.attacks[row.player1_move.moveIndex];
+        const move2 = a2.attacks[row.player2_move.moveIndex];
+
+        const p1First = a1.speed === a2.speed ? Math.random() < 0.5 : a1.speed > a2.speed;
+        const order = p1First ? [1, 2] : [2, 1];
+
+        order.forEach(side => {
+
+            if (side === 1) {
+
+                if (a1.hp <= 0) return;
+
+                const dmg = computeDamage(a1, a2, move1);
+                a2.hp = Math.max(0, a2.hp - dmg);
+
+                log.push(`${a1.name} utilise ${move1.name} et inflige ${dmg} dégâts à ${a2.name} !`);
+                if (a2.hp <= 0) log.push(`${a2.name} est K.O. !`);
+
+            } else {
+
+                if (a2.hp <= 0) return;
+
+                const dmg = computeDamage(a2, a1, move2);
+                a1.hp = Math.max(0, a1.hp - dmg);
+
+                log.push(`${a2.name} utilise ${move2.name} et inflige ${dmg} dégâts à ${a1.name} !`);
+                if (a1.hp <= 0) log.push(`${a1.name} est K.O. !`);
+            }
+        });
+    }
+
+    const team1Alive = team1.some(creature => creature.hp > 0);
+    const team2Alive = team2.some(creature => creature.hp > 0);
+
+    let status = "active";
+    let winner = null;
+
+    if (!team1Alive || !team2Alive) {
+
+        status = "finished";
+        winner = !team1Alive && !team2Alive ? "draw" : (!team1Alive ? "player2" : "player1");
+
+        if (winner === "draw") {
+            log.push("Match nul : les deux équipes sont K.O. !");
+        } else {
+            const winnerPseudo = winner === "player1" ? row.player1_pseudo : row.player2_pseudo;
+            log.push(`${winnerPseudo} remporte le combat ! 🏆`);
+        }
+    }
+
+    const player1_pending = team1Alive && team1[active1].hp <= 0 ? "switch" : "move";
+    const player2_pending = team2Alive && team2[active2].hp <= 0 ? "switch" : "move";
+
+    return {
+        player1_team: team1,
+        player2_team: team2,
+        player1_active: active1,
+        player2_active: active2,
+        player1_move: null,
+        player2_move: null,
+        player1_pending,
+        player2_pending,
+        status,
+        winner,
+        turn: row.turn + 1,
+        log: [...(row.log || []), ...log].slice(-60),
+        updated_at: new Date().toISOString()
+    };
+}
+
+// Tente de résoudre le tour en cours. Protégé par `.eq("turn", row.turn)` :
+// si l'autre client a déjà résolu ce tour entre-temps, cette écriture ne
+// touche aucune ligne et ne fait donc rien (pas de double résolution).
+function attemptResolvePvpTurn(row) {
+
+    const next = computeNextPvpState(row);
+
+    if (!next) return;
+
+    const client = getSupabaseClient();
+
+    if (!client) return;
+
+    client
+        .from("pvp_matches")
+        .update(next)
+        .eq("code", row.code)
+        .eq("turn", row.turn)
+        .then(({ error }) => {
+            if (error) console.error("Résolution du tour PvP impossible :", error);
+        });
+}
+
+function closePvpBattle() {
+
+    if (pvpMatch && pvpMatch.channel) {
+        const client = getSupabaseClient();
+        if (client) client.removeChannel(pvpMatch.channel);
+    }
+
+    pvpMatch = null;
+    pvpOpen = false;
+
+    const pvpWindow = document.getElementById("pvpWindow");
+
+    if (pvpWindow) pvpWindow.remove();
 }
 
 function stepToward(current, target, speed) {
@@ -4773,5 +5789,46 @@ function gameLoop() {
 
 requestAnimationFrame(gameLoop);
 
-// Charger la partie sauvegardée au démarrage
-loadGame();
+// Démarrage : si Supabase n'est pas configuré, comportement historique
+// (pseudo libre, sauvegarde locale globale). Sinon, le jeu passe par un
+// compte pseudo + mot de passe avant de charger/démarrer la partie.
+async function initGame() {
+
+    let client;
+
+    try {
+        client = getSupabaseClient();
+    } catch (error) {
+        // Config Supabase invalide (ex. SUPABASE_URL incomplète) : on affiche
+        // quand même le formulaire de compte, avec l'erreur, plutôt que de
+        // rester bloqué sur l'écran sans aucune explication.
+        console.error("Configuration Supabase invalide :", error);
+        startButton.classList.add("hidden");
+        passwordInput.classList.remove("hidden");
+        authButtons.classList.remove("hidden");
+        showAuthError("Configuration Supabase invalide (vérifie supabase-config.js) : " + error.message);
+        return;
+    }
+
+    if (!client) {
+        loadGame();
+        return;
+    }
+
+    startButton.classList.add("hidden");
+    passwordInput.classList.remove("hidden");
+    authButtons.classList.remove("hidden");
+
+    try {
+        const { data } = await client.auth.getSession();
+
+        if (data.session && data.session.user) {
+            onAuthSuccess(data.session.user);
+        }
+    } catch (error) {
+        console.error("Impossible de récupérer la session Supabase :", error);
+        showAuthError("Impossible de contacter Supabase. Vérifie ta connexion et supabase-config.js.");
+    }
+}
+
+initGame();

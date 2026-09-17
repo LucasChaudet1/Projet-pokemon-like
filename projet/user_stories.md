@@ -276,10 +276,12 @@
 **je veux** affronter un autre joueur en combat,  
 **afin de** tester ma stratégie contre un adversaire humain.
 
+**Statut :** 🚧 Implémenté — nécessite qu'un projet Supabase soit configuré (voir `supabase-config.js` et `supabase_pvp_schema.sql` à la racine du dépôt) pour être jouable, le jeu n'ayant pas d'autre backend.
+
 #### Critères d'acceptation
-- [ ] Le joueur peut affronter un autre joueur.
-- [ ] Chaque joueur utilise son équipe.
-- [ ] Le combat se déroule au tour par tour.
-- [ ] Le vainqueur est déterminé lorsque l'équipe adverse est K.O.
+- [x] Le joueur peut affronter un autre joueur (via un code de partie à 6 caractères partagé entre les deux clients, synchronisé par Supabase Realtime).
+- [x] Chaque joueur utilise son équipe (copie soignée pour le combat, comme un combat officiel, sans affecter l'équipe utilisée en exploration).
+- [x] Le combat se déroule au tour par tour (choix simultané d'une attaque, résolu selon la vitesse des créatures).
+- [x] Le vainqueur est déterminé lorsque l'équipe adverse est K.O. (ou par abandon).
 
 **Priorité :** Basse
