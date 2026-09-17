@@ -497,6 +497,33 @@ function getEffectivenessMessage(multiplier) {
     return null;
 }
 
+// Petit badge affiché à côté du nom d'une attaque dans le menu de combat,
+// pour que le joueur voie le type de l'attaque avant même de l'utiliser.
+function renderMoveTypeBadge(moveType) {
+    return `<span class="move-type-badge move-type-${moveType.toLowerCase()}">${moveType}</span>`;
+}
+
+// Indique, avant de choisir l'attaque, si elle sera avantagée/désavantagée
+// contre la créature adverse actuellement sur le terrain.
+function renderMoveEffectivenessBadge(moveType, defenderType) {
+
+    const multiplier = getTypeMultiplier(moveType, defenderType);
+
+    if (multiplier === 0) {
+        return `<span class="move-effectiveness move-effectiveness-immune">Inefficace</span>`;
+    }
+
+    if (multiplier > 1) {
+        return `<span class="move-effectiveness move-effectiveness-super">Super efficace</span>`;
+    }
+
+    if (multiplier < 1) {
+        return `<span class="move-effectiveness move-effectiveness-weak">Peu efficace</span>`;
+    }
+
+    return "";
+}
+
 function getMovesForType(type) {
     const moves = MOVE_POOL[type] || MOVE_POOL.Normal;
     const moveType = MOVE_POOL[type] ? type : "Normal";
@@ -1577,11 +1604,30 @@ function applySavedGame(saved) {
     // ATTAQUES (anciennes sauvegardes)
     // =========================
 
+    // Régénère les attaques d'une sauvegarde faite avant l'ajout des 100
+    // attaques / des types de dégâts (fix #35 et #36) : ces anciennes
+    // créatures n'avaient que 2 attaques, sans champ "type", donc les
+    // avantages de types les traitaient silencieusement comme neutres.
+    // On sauvegarde tout de suite le résultat pour que cette mise à jour ne
+    // se refasse (et ne re-tire pas d'autres attaques au hasard) qu'une
+    // seule fois, même si le joueur recharge la page avant toute autre action.
+    let attacksMigrated = false;
+
     [...currentPlayer.team, ...currentPlayer.storage].forEach(creature => {
-        if (!creature.attacks || creature.attacks.length === 0) {
+        const outdated =
+            !creature.attacks ||
+            creature.attacks.length !== MOVES_PER_CREATURE ||
+            creature.attacks.some(move => !move.type);
+
+        if (outdated) {
             creature.attacks = pickMovesForCreature(creature.type);
+            attacksMigrated = true;
         }
     });
+
+    if (attacksMigrated) {
+        saveGame();
+    }
 
 
     // =========================
@@ -3287,11 +3333,16 @@ function openMoveMenu() {
     if (!actionsEl) return;
 
     const moves = battlePlayerCreature.attacks;
+    const opponentType = battleWildCreature.type;
 
     actionsEl.innerHTML =
         moves.map((move, index) => `
             <button class="battle-move-button" data-move-index="${index}">
-                ⚔️ ${move.name}
+                <span class="move-button-main">⚔️ ${move.name}</span>
+                <span class="move-button-meta">
+                    ${renderMoveTypeBadge(move.type)}
+                    ${renderMoveEffectivenessBadge(move.type, opponentType)}
+                </span>
             </button>
         `).join("") +
         `<button id="battleMoveBackButton">◀ Retour</button>`;
@@ -4478,10 +4529,18 @@ function renderPvpActions(row, isP1, myPseudo, oppPseudo) {
 
     const mine = myTeam[myActiveIndex];
 
+    const oppTeam = isP1 ? row.player2_team : row.player1_team;
+    const oppActiveIndex = isP1 ? row.player2_active : row.player1_active;
+    const opponentType = oppTeam[oppActiveIndex].type;
+
     actionsEl.innerHTML =
         mine.attacks.map((move, index) => `
             <button class="battle-move-button" data-move-index="${index}">
-                ⚔️ ${move.name}
+                <span class="move-button-main">⚔️ ${move.name}</span>
+                <span class="move-button-meta">
+                    ${renderMoveTypeBadge(move.type)}
+                    ${renderMoveEffectivenessBadge(move.type, opponentType)}
+                </span>
             </button>
         `).join("") +
         `<button id="pvpForfeitButton" class="pvp-secondary">🏳️ Abandonner</button>`;

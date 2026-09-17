@@ -1126,6 +1126,62 @@ body {
     background: #3b75c9;
 }
 
+/* Bouton d'attaque : nom + badges (type de l'attaque, efficacité contre
+   l'adversaire actuellement sur le terrain) */
+
+.battle-move-button {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+}
+
+.move-button-main {
+    font-size: 15px;
+}
+
+.move-button-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.move-type-badge,
+.move-effectiveness {
+    padding: 2px 8px;
+    border-radius: 999px;
+
+    font-size: 11px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+.move-type-badge {
+    color: white;
+    background: rgba(255, 255, 255, 0.25);
+}
+
+.move-type-feu { background: #f08030; }
+.move-type-plante { background: #3f9b3f; }
+.move-type-eau { background: #3b82c4; }
+.move-type-normal { background: #8a8a73; }
+
+.move-effectiveness-super {
+    background: #22c55e;
+    color: #05280f;
+}
+
+.move-effectiveness-weak {
+    background: #f59e0b;
+    color: #3a2400;
+}
+
+.move-effectiveness-immune {
+    background: #6b7280;
+    color: white;
+}
+
 .battle-switch-title {
     margin: 0 0 4px;
     font-weight: bold;
