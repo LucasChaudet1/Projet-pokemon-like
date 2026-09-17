@@ -3346,81 +3346,456 @@ function updatePlayer() {
     }
 }
 
+function drawCenterPC(x, y) {
+
+    // halo
+    drawGlow(
+        x + TILE_SIZE / 2,
+        y + TILE_SIZE / 2,
+        28,
+        "#60a5fa",
+        0.12
+    );
+
+    // ombre
+    drawSoftShadow(
+        x + TILE_SIZE / 2,
+        y + TILE_SIZE + 2,
+        14,
+        4,
+        0.25
+    );
+
+    // meuble
+    ctx.fillStyle = "#334155";
+
+    ctx.beginPath();
+
+    ctx.roundRect(
+        x + 3,
+        y + 12,
+        26,
+        25,
+        5
+    );
+
+    ctx.fill();
+
+    // écran
+    ctx.fillStyle = "#0f172a";
+
+    ctx.beginPath();
+
+    ctx.roundRect(
+        x + 2,
+        y - 10,
+        28,
+        23,
+        5
+    );
+
+    ctx.fill();
+
+    // écran lumineux
+    const screenGradient =
+        ctx.createLinearGradient(
+            x,
+            y - 8,
+            x,
+            y + 10
+        );
+
+    screenGradient.addColorStop(
+        0,
+        "#38bdf8"
+    );
+
+    screenGradient.addColorStop(
+        1,
+        "#2563eb"
+    );
+
+    ctx.fillStyle = screenGradient;
+
+    ctx.fillRect(
+        x + 6,
+        y - 6,
+        20,
+        15
+    );
+
+    // symbole
+    ctx.fillStyle = "#ffffff";
+
+    ctx.font = "11px Arial";
+    ctx.textAlign = "center";
+
+    ctx.fillText(
+        "✚",
+        x + TILE_SIZE / 2,
+        y + 5
+    );
+
+    // clavier
+    ctx.fillStyle = "#cbd5e1";
+
+    ctx.fillRect(
+        x + 6,
+        y + 17,
+        20,
+        5
+    );
+
+    // pied
+    ctx.fillStyle = "#475569";
+
+    ctx.fillRect(
+        x + 11,
+        y + 36,
+        10,
+        5
+    );
+
+    ctx.textAlign = "left";
+}
+
+function drawParticles() {
+    ctx.save();
+
+    for (let i = 0; i < 20; i++) {
+        const x = (i * 97 + visualTime * 8) % canvas.width;
+        const y = (i * 53 + Math.sin(visualTime + i) * 5) % canvas.height;
+
+        ctx.fillStyle = "rgba(255,255,255,0.25)";
+
+        ctx.beginPath();
+        ctx.arc(x, y, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    ctx.restore();
+}
+
 function drawCenterInterior() {
 
-    // Fond
-    ctx.fillStyle = "#e9eef5";
+    const W = CENTER_COLS * TILE_SIZE;
+    const H = CENTER_ROWS * TILE_SIZE;
+
+    // =========================
+    // FOND
+    // =========================
+
+    ctx.fillStyle = "#dbeafe";
+
     ctx.fillRect(
         0,
         0,
-        canvas.width,
-        canvas.height
+        W,
+        H
     );
 
-    // Sol en carreaux
-    for (let y = 1; y < CENTER_ROWS - 1; y++) {
+    // =========================
+    // SOL
+    // =========================
 
-        for (let x = 1; x < CENTER_COLS - 1; x++) {
+    for (
+        let y = 1;
+        y < CENTER_ROWS - 1;
+        y++
+    ) {
+
+        for (
+            let x = 1;
+            x < CENTER_COLS - 1;
+            x++
+        ) {
+
+            const px = x * TILE_SIZE;
+            const py = y * TILE_SIZE;
 
             ctx.fillStyle =
                 (x + y) % 2 === 0
-                    ? "#f4f7fb"
-                    : "#e2e8f0";
+                    ? "#f8fafc"
+                    : "#e8eef7";
 
             ctx.fillRect(
-                x * TILE_SIZE,
-                y * TILE_SIZE,
+                px,
+                py,
+                TILE_SIZE,
+                TILE_SIZE
+            );
+
+            // jointure des carreaux
+            ctx.strokeStyle = "rgba(148,163,184,0.12)";
+            ctx.lineWidth = 1;
+
+            ctx.strokeRect(
+                px,
+                py,
                 TILE_SIZE,
                 TILE_SIZE
             );
         }
     }
 
+    // =========================
+    // MUR SUPÉRIEUR
+    // =========================
 
-    // Mur du haut
-    ctx.fillStyle = "#4b8ee8";
+    const wallGradient =
+        ctx.createLinearGradient(
+            0,
+            0,
+            0,
+            TILE_SIZE
+        );
+
+    wallGradient.addColorStop(
+        0,
+        "#2563eb"
+    );
+
+    wallGradient.addColorStop(
+        1,
+        "#60a5fa"
+    );
+
+    ctx.fillStyle = wallGradient;
 
     ctx.fillRect(
         0,
         0,
-        CENTER_COLS * TILE_SIZE,
+        W,
         TILE_SIZE
     );
 
-
-    // Comptoir
-    ctx.fillStyle = "#e85b4f";
+    // ligne lumineuse
+    ctx.fillStyle = "rgba(255,255,255,0.35)";
 
     ctx.fillRect(
-        7 * TILE_SIZE,
-        4 * TILE_SIZE,
-        6 * TILE_SIZE,
-        TILE_SIZE * 2
+        0,
+        TILE_SIZE - 4,
+        W,
+        4
     );
 
+    // =========================
+    // ENSEIGNE
+    // =========================
 
-    // Comptoir blanc
+    ctx.save();
+
     ctx.fillStyle = "#ffffff";
 
+    ctx.beginPath();
+
+    ctx.roundRect(
+        W / 2 - 90,
+        8,
+        180,
+        34,
+        10
+    );
+
+    ctx.fill();
+
+    ctx.strokeStyle = "#bfdbfe";
+    ctx.lineWidth = 2;
+
+    ctx.stroke();
+
+    ctx.fillStyle = "#2563eb";
+
+    ctx.font = "bold 16px Arial";
+    ctx.textAlign = "center";
+
+    ctx.fillText(
+        "✚ CENTRE FAKEMON",
+        W / 2,
+        30
+    );
+
+    ctx.restore();
+
+    // =========================
+    // COMPTOIR
+    // =========================
+
+    const counterX = 7 * TILE_SIZE;
+    const counterY = 4 * TILE_SIZE;
+    const counterW = 6 * TILE_SIZE;
+    const counterH = 2 * TILE_SIZE;
+
+    // ombre
+    ctx.fillStyle = "rgba(0,0,0,0.15)";
+
     ctx.fillRect(
-        7 * TILE_SIZE,
-        4 * TILE_SIZE,
-        6 * TILE_SIZE,
+        counterX + 4,
+        counterY + 5,
+        counterW,
+        counterH
+    );
+
+    // meuble
+    const counterGradient =
+        ctx.createLinearGradient(
+            counterX,
+            counterY,
+            counterX,
+            counterY + counterH
+        );
+
+    counterGradient.addColorStop(
+        0,
+        "#fb7185"
+    );
+
+    counterGradient.addColorStop(
+        1,
+        "#be123c"
+    );
+
+    ctx.fillStyle = counterGradient;
+
+    ctx.beginPath();
+
+    ctx.roundRect(
+        counterX,
+        counterY,
+        counterW,
+        counterH,
         8
     );
 
+    ctx.fill();
 
-    // Infirmière
-    const nurse = CENTER_NPCS[0];
+    // surface blanche
+    ctx.fillStyle = "#ffffff";
 
-    drawNPC(
-        nurse.tileX * TILE_SIZE,
-        nurse.tileY * TILE_SIZE,
-        nurse
+    ctx.fillRect(
+        counterX,
+        counterY,
+        counterW,
+        8
     );
 
+    // croix
+    ctx.fillStyle = "#ef4444";
 
-    // Plantes
+    ctx.fillRect(
+        W / 2 - 6,
+        counterY + 18,
+        12,
+        32
+    );
+
+    ctx.fillRect(
+        W / 2 - 16,
+        counterY + 28,
+        32,
+        12
+    );
+
+    // =========================
+    // INFIRMIÈRE
+    // =========================
+
+    const nurse = CENTER_NPCS
+        ? CENTER_NPCS[0]
+        : null;
+
+    if (nurse) {
+
+        drawNPC(
+            nurse.tileX * TILE_SIZE,
+            nurse.tileY * TILE_SIZE,
+            nurse
+        );
+    }
+
+    // =========================
+    // ZONE DE SOIN
+    // =========================
+
+    const healX = 10 * TILE_SIZE;
+    const healY = 9 * TILE_SIZE;
+
+    // halo animé
+    const pulse =
+        42 +
+        Math.sin(visualTime * 3) * 4;
+
+    drawGlow(
+        healX,
+        healY,
+        pulse,
+        "#60a5fa",
+        0.12
+    );
+
+    // plateforme
+    ctx.fillStyle = "#93c5fd";
+
+    ctx.beginPath();
+
+    ctx.arc(
+        healX,
+        healY,
+        44,
+        0,
+        Math.PI * 2
+    );
+
+    ctx.fill();
+
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 4;
+
+    ctx.stroke();
+
+    // centre
+    ctx.fillStyle = "#ffffff";
+
+    ctx.beginPath();
+
+    ctx.arc(
+        healX,
+        healY,
+        29,
+        0,
+        Math.PI * 2
+    );
+
+    ctx.fill();
+
+    // croix médicale
+    ctx.fillStyle = "#ef4444";
+
+    ctx.fillRect(
+        healX - 5,
+        healY - 19,
+        10,
+        38
+    );
+
+    ctx.fillRect(
+        healX - 19,
+        healY - 5,
+        38,
+        10
+    );
+
+    // particules
+    drawParticles(
+        healX,
+        healY,
+        6
+    );
+
+    // =========================
+    // PLANTES
+    // =========================
+
     drawCenterPlant(
         3 * TILE_SIZE,
         4 * TILE_SIZE
@@ -3431,100 +3806,62 @@ function drawCenterInterior() {
         4 * TILE_SIZE
     );
 
-
-    // Zone de soin
-    ctx.fillStyle = "#9dbcf0";
-
-    ctx.beginPath();
-
-    ctx.arc(
-        10 * TILE_SIZE,
-        9 * TILE_SIZE,
-        45,
-        0,
-        Math.PI * 2
+    drawCenterPlant(
+        3 * TILE_SIZE,
+        10 * TILE_SIZE
     );
 
-    ctx.fill();
-
-    ctx.fillStyle = "#ffffff";
-
-    ctx.beginPath();
-
-    ctx.arc(
-        10 * TILE_SIZE,
-        9 * TILE_SIZE,
-        30,
-        0,
-        Math.PI * 2
+    drawCenterPlant(
+        16 * TILE_SIZE,
+        10 * TILE_SIZE
     );
 
-    ctx.fill();
+    // =========================
+    // PC
+    // =========================
 
+    drawCenterPC(
+        15 * TILE_SIZE,
+        7 * TILE_SIZE
+    );
 
-    // Texte
-    ctx.fillStyle = "#333";
-    ctx.font = "bold 18px Arial";
+    // =========================
+    // INDICATIONS
+    // =========================
+
+    ctx.save();
+
+    ctx.font = "bold 11px Arial";
     ctx.textAlign = "center";
 
+    ctx.fillStyle = "#475569";
+
     ctx.fillText(
-        "CENTRE FAKEMON",
-        canvas.width / 2,
-        30
+        "💗 SOINS",
+        healX,
+        healY + 62
     );
 
-    ctx.textAlign = "left";
+    ctx.fillText(
+        "💻 PC",
+        15 * TILE_SIZE + TILE_SIZE / 2,
+        7 * TILE_SIZE + 52
+    );
+
+    ctx.restore();
 
     // =========================
-    // PC DE STOCKAGE
+    // BORDURES
     // =========================
 
-    const pcX = 15 * TILE_SIZE;
-    const pcY = 7 * TILE_SIZE;
+    ctx.strokeStyle = "#93c5fd";
+    ctx.lineWidth = 5;
 
-    // meuble
-    ctx.fillStyle = "#374151";
-    ctx.fillRect(
-        pcX + 2,
-        pcY + 10,
-        28,
-        22
-    );
-
-    // écran
-    ctx.fillStyle = "#111827";
-    ctx.fillRect(
-        pcX + 3,
-        pcY - 12,
-        26,
-        22
-    );
-
-    // écran bleu
-    ctx.fillStyle = "#60a5fa";
-    ctx.fillRect(
-        pcX + 6,
-        pcY - 9,
-        20,
-        16
-    );
-
-    // clavier
-    ctx.fillStyle = "#d1d5db";
-    ctx.fillRect(
-        pcX + 6,
-        pcY + 13,
-        20,
-        5
-    );
-
-    // pied
-    ctx.fillStyle = "#4b5563";
-    ctx.fillRect(
-        pcX + 11,
-        pcY + 32,
-        10,
-        5
+    ctx.strokeRect(
+        2,
+        2,
+        W - 4,
+        H - 4
     );
 }
 
@@ -4405,15 +4742,46 @@ function drawTile(x, y, screenX, screenY) {
         ctx.arc(screenX + TILE_SIZE / 2, screenY + TILE_SIZE / 2, 3, 0, Math.PI * 2);
         ctx.fill();
     } else if (tile.deco === "tallgrass") {
+
+        const wind =
+            Math.sin(
+                visualTime * 2 +
+                x * 0.7 +
+                y * 0.4
+            ) * 3;
+
         ctx.strokeStyle = "#1f5c1f";
         ctx.lineWidth = 2;
+
         const blades = [
-            [8, 26], [14, 22], [20, 27], [26, 23]
+            [8, 26],
+            [14, 22],
+            [20, 27],
+            [26, 23]
         ];
-        blades.forEach(([bx, by]) => {
+
+        blades.forEach(([bx, by], index) => {
+
+            const localWind =
+                wind +
+                Math.sin(
+                    visualTime * 3 + index
+                ) * 1.5;
+
             ctx.beginPath();
-            ctx.moveTo(screenX + bx, screenY + by);
-            ctx.lineTo(screenX + bx, screenY + by - 14);
+
+            ctx.moveTo(
+                screenX + bx,
+                screenY + by
+            );
+
+            ctx.quadraticCurveTo(
+                screenX + bx + localWind,
+                screenY + by - 8,
+                screenX + bx + localWind * 1.5,
+                screenY + by - 14
+            );
+
             ctx.stroke();
         });
     } else if (tile.deco === "bush") {
@@ -4484,10 +4852,51 @@ function drawTile(x, y, screenX, screenY) {
         ctx.arc(screenX + TILE_SIZE / 2, screenY + 6, 4, 0, Math.PI * 2);
         ctx.fill();
     } else if (tileKey === "WATER") {
-        ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
+
+        const wave =
+            Math.sin(
+                visualTime * 2 +
+                x * 0.8 +
+                y
+            ) * 3;
+
+        ctx.strokeStyle =
+            "rgba(255,255,255,0.35)";
+
+        ctx.lineWidth = 1.5;
+
         ctx.beginPath();
-        ctx.moveTo(screenX + 4, screenY + TILE_SIZE / 2);
-        ctx.lineTo(screenX + TILE_SIZE - 4, screenY + TILE_SIZE / 2);
+
+        ctx.moveTo(
+            screenX + 4,
+            screenY + TILE_SIZE / 2 + wave
+        );
+
+        ctx.quadraticCurveTo(
+            screenX + TILE_SIZE / 2,
+            screenY + TILE_SIZE / 2 - wave,
+            screenX + TILE_SIZE - 4,
+            screenY + TILE_SIZE / 2 + wave
+        );
+
+        ctx.stroke();
+
+        // deuxième reflet
+        ctx.strokeStyle =
+            "rgba(255,255,255,0.18)";
+
+        ctx.beginPath();
+
+        ctx.moveTo(
+            screenX + 8,
+            screenY + TILE_SIZE / 2 + 8 - wave
+        );
+
+        ctx.lineTo(
+            screenX + TILE_SIZE - 8,
+            screenY + TILE_SIZE / 2 + 8 - wave
+        );
+
         ctx.stroke();
     } else if (tileKey === "GYM_WALL" || tileKey === "GYM_DOOR") {
 
@@ -4564,62 +4973,341 @@ function drawCenterPlant(x, y) {
 }
 
 function drawPlayer(screenX, screenY) {
-    // Ombre
-    ctx.fillStyle = "rgba(0, 0, 0, 0.3)";
+
+    const bob =
+        player.moving
+            ? Math.sin(visualTime * 18) * 2
+            : Math.sin(visualTime * 3) * 0.5;
+
+    const x = screenX;
+    const y = screenY + bob;
+
+    // =====================
+    // OMBRE
+    // =====================
+
+    drawSoftShadow(
+        x + TILE_SIZE / 2,
+        screenY + TILE_SIZE - 3,
+        11,
+        4,
+        0.3
+    );
+
+    // =====================
+    // CAPUCHE / CHEVEUX
+    // =====================
+
+    ctx.fillStyle = "#172554";
+
     ctx.beginPath();
-    ctx.ellipse(screenX + TILE_SIZE / 2, screenY + TILE_SIZE - 4, 10, 4, 0, 0, Math.PI * 2);
+
+    ctx.arc(
+        x + TILE_SIZE / 2,
+        y + 9,
+        9,
+        Math.PI,
+        Math.PI * 2
+    );
+
     ctx.fill();
 
-    // Corps
-    ctx.fillStyle = "#3355dd";
-    ctx.fillRect(screenX + 8, screenY + 14, TILE_SIZE - 16, 14);
+    // =====================
+    // VISAGE
+    // =====================
 
-    // Tête
     ctx.fillStyle = "#f2c48d";
+
     ctx.beginPath();
-    ctx.arc(screenX + TILE_SIZE / 2, screenY + 10, 8, 0, Math.PI * 2);
+
+    ctx.arc(
+        x + TILE_SIZE / 2,
+        y + 11,
+        7,
+        0,
+        Math.PI * 2
+    );
+
     ctx.fill();
 
-    // Indicateur de direction
-    const cx = screenX + TILE_SIZE / 2;
-    const cy = screenY + TILE_SIZE / 2;
-    ctx.fillStyle = "#222";
+    // =====================
+    // YEUX
+    // =====================
+
+    ctx.fillStyle = "#111827";
+
+    ctx.fillRect(
+        x + 13,
+        y + 9,
+        2,
+        2
+    );
+
+    ctx.fillRect(
+        x + 17,
+        y + 9,
+        2,
+        2
+    );
+
+    // =====================
+    // CORPS
+    // =====================
+
+    ctx.fillStyle = "#3155d9";
+
     ctx.beginPath();
+
+    ctx.roundRect(
+        x + 8,
+        y + 17,
+        TILE_SIZE - 16,
+        13,
+        4
+    );
+
+    ctx.fill();
+
+    // =====================
+    // BANDE DU VÊTEMENT
+    // =====================
+
+    ctx.fillStyle = "#ffffff";
+
+    ctx.fillRect(
+        x + 13,
+        y + 18,
+        6,
+        10
+    );
+
+    // =====================
+    // JAMBES
+    // =====================
+
+    ctx.fillStyle = "#172554";
+
+    ctx.fillRect(
+        x + 10,
+        y + 29,
+        6,
+        5
+    );
+
+    ctx.fillRect(
+        x + 18,
+        y + 29,
+        6,
+        5
+    );
+
+    // =====================
+    // INDICATEUR DIRECTION
+    // =====================
+
+    const cx = x + TILE_SIZE / 2;
+    const cy = y + TILE_SIZE / 2;
+
+    ctx.fillStyle = "#facc15";
+
+    ctx.beginPath();
+
     if (player.direction === "up") {
-        ctx.moveTo(cx - 4, cy - 8); ctx.lineTo(cx + 4, cy - 8); ctx.lineTo(cx, cy - 14);
+
+        ctx.moveTo(cx, cy - 14);
+        ctx.lineTo(cx - 4, cy - 8);
+        ctx.lineTo(cx + 4, cy - 8);
+
     } else if (player.direction === "down") {
-        ctx.moveTo(cx - 4, cy + 12); ctx.lineTo(cx + 4, cy + 12); ctx.lineTo(cx, cy + 18);
+
+        ctx.moveTo(cx, cy + 16);
+        ctx.lineTo(cx - 4, cy + 10);
+        ctx.lineTo(cx + 4, cy + 10);
+
     } else if (player.direction === "left") {
-        ctx.moveTo(cx - 10, cy - 2); ctx.lineTo(cx - 10, cy + 6); ctx.lineTo(cx - 16, cy + 2);
-    } else if (player.direction === "right") {
-        ctx.moveTo(cx + 10, cy - 2); ctx.lineTo(cx + 10, cy + 6); ctx.lineTo(cx + 16, cy + 2);
+
+        ctx.moveTo(cx - 15, cy);
+        ctx.lineTo(cx - 9, cy - 4);
+        ctx.lineTo(cx - 9, cy + 4);
+
+    } else {
+
+        ctx.moveTo(cx + 15, cy);
+        ctx.lineTo(cx + 9, cy - 4);
+        ctx.lineTo(cx + 9, cy + 4);
     }
+
     ctx.closePath();
     ctx.fill();
 }
 
 function drawNPC(screenX, screenY, npc) {
-    // Ombre
-    ctx.fillStyle = "rgba(0, 0, 0, 0.3)";
-    ctx.beginPath();
-    ctx.ellipse(screenX + TILE_SIZE / 2, screenY + TILE_SIZE - 4, 10, 4, 0, 0, Math.PI * 2);
-    ctx.fill();
 
-    // Corps
+    const bob =
+        Math.sin(
+            visualTime * 2 +
+            npc.tileX +
+            npc.tileY
+        ) * 0.8;
+
+    const x = screenX;
+    const y = screenY + bob;
+
+    // =====================
+    // OMBRE
+    // =====================
+
+    drawSoftShadow(
+        x + TILE_SIZE / 2,
+        screenY + TILE_SIZE - 3,
+        10,
+        4,
+        0.28
+    );
+
+    // =====================
+    // HALO PNJ
+    // =====================
+
+    if (npc.type === "heal") {
+
+        drawGlow(
+            x + TILE_SIZE / 2,
+            y + TILE_SIZE / 2,
+            30,
+            "#ff8fc7",
+            0.18
+        );
+    }
+
+    // =====================
+    // CORPS
+    // =====================
+
     ctx.fillStyle = npc.color;
-    ctx.fillRect(screenX + 8, screenY + 14, TILE_SIZE - 16, 14);
 
-    // Tête
-    ctx.fillStyle = "#f2c48d";
     ctx.beginPath();
-    ctx.arc(screenX + TILE_SIZE / 2, screenY + 10, 8, 0, Math.PI * 2);
+
+    ctx.roundRect(
+        x + 7,
+        y + 15,
+        TILE_SIZE - 14,
+        15,
+        4
+    );
+
     ctx.fill();
 
-    // Icône d'interaction
-    ctx.font = "14px Arial";
+    // =====================
+    // TÊTE
+    // =====================
+
+    ctx.fillStyle = "#f2c48d";
+
+    ctx.beginPath();
+
+    ctx.arc(
+        x + TILE_SIZE / 2,
+        y + 10,
+        8,
+        0,
+        Math.PI * 2
+    );
+
+    ctx.fill();
+
+    // =====================
+    // CHEVEUX
+    // =====================
+
+    ctx.fillStyle =
+        npc.type === "heal"
+            ? "#f8fafc"
+            : "#4b2e20";
+
+    ctx.beginPath();
+
+    ctx.arc(
+        x + TILE_SIZE / 2,
+        y + 7,
+        8,
+        Math.PI,
+        Math.PI * 2
+    );
+
+    ctx.fill();
+
+    // =====================
+    // YEUX
+    // =====================
+
+    ctx.fillStyle = "#111827";
+
+    ctx.fillRect(
+        x + 13,
+        y + 9,
+        2,
+        2
+    );
+
+    ctx.fillRect(
+        x + 17,
+        y + 9,
+        2,
+        2
+    );
+
+    // =====================
+    // ICÔNE
+    // =====================
+
+    ctx.save();
+
+    ctx.font = "16px Arial";
     ctx.textAlign = "center";
-    ctx.fillText(npc.icon, screenX + TILE_SIZE / 2, screenY - 4);
-    ctx.textAlign = "left";
+
+    const iconY =
+        y - 5 +
+        Math.sin(visualTime * 3) * 2;
+
+    ctx.fillText(
+        npc.icon,
+        x + TILE_SIZE / 2,
+        iconY
+    );
+
+    ctx.restore();
+
+    // =====================
+    // NOM PNJ
+    // =====================
+
+    if (npc.type === "heal") {
+
+        ctx.save();
+
+        ctx.font = "bold 10px Arial";
+        ctx.textAlign = "center";
+
+        ctx.fillStyle = "#ffffff";
+
+        ctx.strokeStyle = "#334155";
+        ctx.lineWidth = 3;
+
+        ctx.strokeText(
+            npc.name,
+            x + TILE_SIZE / 2,
+            y - 14
+        );
+
+        ctx.fillText(
+            npc.name,
+            x + TILE_SIZE / 2,
+            y - 14
+        );
+
+        ctx.restore();
+    }
 }
 
 let lastZone = null;
@@ -4663,7 +5351,48 @@ function updateZoneLabel() {
     }
 }
 
+let visualTime = 0;
+
+function updateVisualTime() {
+    visualTime += 0.016;
+}
+
+function drawSoftShadow(x, y, radiusX, radiusY, alpha = 0.3) {
+    ctx.save();
+
+    ctx.fillStyle = `rgba(0, 0, 0, ${alpha})`;
+
+    ctx.beginPath();
+    ctx.ellipse(
+        x,
+        y,
+        radiusX,
+        radiusY,
+        0,
+        0,
+        Math.PI * 2
+    );
+    ctx.fill();
+
+    ctx.restore();
+}
+
+function drawGlow(x, y, radius, color, alpha = 0.2) {
+    ctx.save();
+
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = color;
+
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+}
+
 function render() {
+
+    updateVisualTime();
 
     // =========================
     // INTÉRIEUR DU CENTRE
