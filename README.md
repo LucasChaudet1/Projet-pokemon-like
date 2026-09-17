@@ -1,5 +1,7 @@
 ﻿# 🎮 Projet Pokémon-like
 
+🔗 **[Jouer en ligne](https://projet-pokemon-like.vercel.app/)**
+
 Projet de jeu vidéo **Pokémon-like** réalisé dans le cadre d'un projet de développement.
 
 Le joueur peut explorer le monde, rencontrer et capturer des créatures, constituer son équipe, combattre, faire évoluer ses créatures et gérer sa progression.
