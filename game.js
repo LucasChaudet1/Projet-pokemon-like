@@ -512,6 +512,24 @@ const NPCS = [
     }
 ];
 
+// PNJ présents dans le Centre Fakemon
+const CENTER_NPCS = [
+    {
+        id: "nurse",
+        name: "Infirmière",
+        tileX: 10,
+        tileY: 3,
+        color: "#ff69b4",
+        type: "heal",
+        icon: "💗",
+        lines: [
+            "Bonjour ! Bienvenue au Centre Fakemon !",
+            "Je peux soigner gratuitement toute ton équipe.",
+            "Voilà ! Toutes tes créatures sont maintenant en pleine forme !"
+        ]
+    }
+];
+
 // Arènes, une par biome. L'ordre du tableau est l'ordre de progression :
 // chaque maître d'arène refuse de combattre tant que le précédent n'est pas battu.
 const GYMS = [
@@ -1847,9 +1865,7 @@ function buildGymMap() {
 gymMap = buildGymMap();
 
 function enterCenter() {
-
     currentMap = "center";
-
     currentPlayer.currentMap = "center";
 
     player.tileX = Math.floor(CENTER_COLS / 2);
@@ -1864,14 +1880,6 @@ function enterCenter() {
     player.moving = false;
 
     zoneLabel.textContent = "🏥 Centre Fakemon";
-
-    // Soigne gratuitement toute l'équipe
-    currentPlayer.team.forEach(creature => {
-        creature.hp = creature.maxHp;
-        creature.fainted = false;
-    });
-
-    updateTeamDisplay();
 
     saveGame();
 }
@@ -2059,31 +2067,39 @@ function tryMove(dx, dy, direction) {
 
     if (currentMap === "center") {
 
-        if (
-            newX < 0 ||
-            newX >= CENTER_COLS ||
-            newY < 0 ||
-            newY >= CENTER_ROWS
-        ) {
-            return;
-        }
-
-        const tile = TILES[centerMap[newY][newX]];
-
-        if (!tile.walkable) {
-            return;
-        }
-
-        player.tileX = newX;
-        player.tileY = newY;
-
-        player.targetPixelX = newX * TILE_SIZE;
-        player.targetPixelY = newY * TILE_SIZE;
-
-        player.moving = true;
-
+    if (
+        newX < 0 ||
+        newX >= CENTER_COLS ||
+        newY < 0 ||
+        newY >= CENTER_ROWS
+    ) {
         return;
     }
+
+    const npcAtDestination = CENTER_NPCS.find(
+        npc =>
+            npc.tileX === newX &&
+            npc.tileY === newY
+    );
+
+    if (npcAtDestination) {
+        return;
+    }
+
+    const tile = TILES[centerMap[newY][newX]];
+
+    if (!tile.walkable) {
+        return;
+    }
+
+    player.tileX = newX;
+    player.tileY = newY;
+
+    player.targetPixelX = newX * TILE_SIZE;
+    player.targetPixelY = newY * TILE_SIZE;
+
+    player.moving = true;
+}
 
     if (currentMap === "gym") {
 
@@ -2139,11 +2155,27 @@ function getFacingTile() {
 
 function checkNPCInteraction() {
 
-    if (currentMap !== "world") return false;
     if (player.moving) return false;
 
     const facing = getFacingTile();
-    const npc = findNPCAt(facing.x, facing.y);
+
+    let npc = null;
+
+    if (currentMap === "world") {
+        npc = NPCS.find(
+            npc =>
+                npc.tileX === facing.x &&
+                npc.tileY === facing.y
+        );
+    }
+
+    if (currentMap === "center") {
+        npc = CENTER_NPCS.find(
+            npc =>
+                npc.tileX === facing.x &&
+                npc.tileY === facing.y
+        );
+    }
 
     if (!npc) return false;
 
@@ -2279,6 +2311,20 @@ function resolveDialogueOutcome(npc) {
             }
         }
 
+    } else if (npc.type === "heal") {
+
+        currentPlayer.team.forEach(creature => {
+            creature.hp = creature.maxHp;
+            creature.fainted = false;
+        });
+
+        updateTeamDisplay();
+        saveGame();
+
+        if (textEl) {
+            textEl.textContent =
+                "💗 Ton équipe a été entièrement soignée !";
+        }
     } else if (npc.type === "shop") {
 
         closeDialogue();
@@ -3365,19 +3411,13 @@ function drawCenterInterior() {
 
 
     // Infirmière
-    ctx.fillStyle = "#ffb6c1";
+    const nurse = CENTER_NPCS[0];
 
-    ctx.beginPath();
-
-    ctx.arc(
-        10 * TILE_SIZE,
-        3 * TILE_SIZE,
-        12,
-        0,
-        Math.PI * 2
+    drawNPC(
+        nurse.tileX * TILE_SIZE,
+        nurse.tileY * TILE_SIZE,
+        nurse
     );
-
-    ctx.fill();
 
 
     // Plantes
