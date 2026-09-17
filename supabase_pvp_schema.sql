@@ -4,7 +4,8 @@
 -- 1. Dans le dashboard Supabase de ton projet, ouvre l'onglet "SQL Editor".
 -- 2. Colle tout ce fichier et clique sur "Run" (le script peut être relancé
 --    sans risque si tu l'as déjà exécuté une fois : "create table if not
---    exists" et "drop policy if exists" le rendent rejouable).
+--    exists", "drop policy if exists" et les blocs "do $$ ... $$" pour le
+--    temps réel le rendent entièrement rejouable, sans aucune erreur).
 -- 3. C'est tout : les dernières instructions activent le temps réel sur les
 --    tables, tu n'as rien d'autre à activer manuellement.
 --
@@ -62,10 +63,21 @@ drop policy if exists "Suppression publique des parties" on pvp_matches;
 create policy "Suppression publique des parties" on pvp_matches
     for delete using (true);
 
--- Active la réplication temps réel (Realtime) pour cette table.
--- Si tu obtiens une erreur du type "already member of publication", c'est
--- normal (ça veut dire que c'est déjà activé) : ignore-la simplement.
-alter publication supabase_realtime add table pvp_matches;
+-- Active la réplication temps réel (Realtime) pour cette table, seulement
+-- si elle n'y est pas déjà (contrairement à "create table if not exists",
+-- "alter publication ... add table" échoue si on le relance sur une table
+-- déjà ajoutée : ce bloc évite l'erreur en le vérifiant d'abord).
+do $$
+begin
+    if not exists (
+        select 1 from pg_publication_tables
+        where pubname = 'supabase_realtime'
+          and schemaname = 'public'
+          and tablename = 'pvp_matches'
+    ) then
+        alter publication supabase_realtime add table pvp_matches;
+    end if;
+end $$;
 
 
 -- ==========================================================
@@ -105,4 +117,14 @@ drop policy if exists "Suppression publique de la file PvP" on pvp_queue;
 create policy "Suppression publique de la file PvP" on pvp_queue
     for delete using (true);
 
-alter publication supabase_realtime add table pvp_queue;
+do $$
+begin
+    if not exists (
+        select 1 from pg_publication_tables
+        where pubname = 'supabase_realtime'
+          and schemaname = 'public'
+          and tablename = 'pvp_queue'
+    ) then
+        alter publication supabase_realtime add table pvp_queue;
+    end if;
+end $$;
