@@ -525,10 +525,28 @@ function renderMoveEffectivenessBadge(moveType, defenderType) {
     return "";
 }
 
+// Badge du coût en MP d'une attaque, dans le menu de combat, marqué en
+// rouge si la créature n'a plus assez de MP pour se la payer.
+function renderMoveMpBadge(move, creature) {
+
+    const affordable = canAffordMove(creature, move);
+
+    return `<span class="move-mp-cost${affordable ? "" : " move-mp-cost-unaffordable"}">${move.mpCost} MP</span>`;
+}
+
+// Coût en MP d'une attaque, proportionnel à sa puissance (une attaque deux
+// fois plus puissante coûte deux fois plus de MP) : plus une attaque tape
+// fort, moins on peut la lancer de fois d'affilée sans se reposer.
+const MP_COST_FACTOR = 10;
+
+function getMoveMpCost(power) {
+    return Math.max(1, Math.round(power * MP_COST_FACTOR));
+}
+
 function getMovesForType(type) {
     const moves = MOVE_POOL[type] || MOVE_POOL.Normal;
     const moveType = MOVE_POOL[type] ? type : "Normal";
-    return moves.map(move => ({ ...move, type: moveType }));
+    return moves.map(move => ({ ...move, type: moveType, mpCost: getMoveMpCost(move.power) }));
 }
 
 // Tire au sort (sans répétition) MOVES_PER_CREATURE attaques parmi celles
@@ -546,9 +564,40 @@ function pickMovesForCreature(type) {
     return pool.slice(0, MOVES_PER_CREATURE);
 }
 
-function pickRandomMove(creature) {
-    if (!creature.attacks || creature.attacks.length === 0) return null;
-    return creature.attacks[Math.floor(Math.random() * creature.attacks.length)];
+// Attaque de repli utilisée quand une créature n'a plus assez de MP pour
+// aucune de ses attaques (comme "Lutte" dans les jeux officiels) : gratuite,
+// mais inflige un contrecoup à celui qui l'utilise.
+const STRUGGLE_MOVE = {
+    name: "Lutte",
+    power: 0.5,
+    type: "Normal",
+    mpCost: 0,
+    isStruggle: true
+};
+
+function canAffordMove(creature, move) {
+    return creature.mp >= move.mpCost;
+}
+
+function hasAffordableMove(creature) {
+    return !!creature.attacks && creature.attacks.some(move => canAffordMove(creature, move));
+}
+
+// Choisit une attaque au hasard parmi celles que la créature peut encore se
+// payer ; si aucune n'est abordable, elle se rabat sur Lutte.
+function pickAffordableMove(creature) {
+
+    if (!creature.attacks || creature.attacks.length === 0) {
+        return STRUGGLE_MOVE;
+    }
+
+    const affordable = creature.attacks.filter(move => canAffordMove(creature, move));
+
+    if (affordable.length === 0) {
+        return STRUGGLE_MOVE;
+    }
+
+    return affordable[Math.floor(Math.random() * affordable.length)];
 }
 
 // Objets en vente à la boutique
@@ -566,6 +615,13 @@ const SHOP_ITEMS = [
         icon: "🔴",
         price: 25,
         description: "Permet de tenter de capturer une créature sauvage."
+    },
+    {
+        id: "ether",
+        name: "Élixir",
+        icon: "🔷",
+        price: 20,
+        description: "Restaure 20 MP d'une créature."
     }
 ];
 
@@ -1112,6 +1168,21 @@ function showCreatureSelection() {
     creatureScreen.classList.remove("hidden");
 }
 
+// Base de MP par type au niveau 5, avant application du niveau (voir
+// getMaxMpForCreature ci-dessous). Séparée de la table de stats principale
+// pour pouvoir être réutilisée lors de la migration d'anciennes sauvegardes
+// (voir applySavedGame) sans dupliquer les nombres magiques.
+const MP_BASE_BY_TYPE = {
+    Feu: 36,
+    Plante: 44,
+    Eau: 40
+};
+
+function getMaxMpForCreature(type, level) {
+    const base = MP_BASE_BY_TYPE[type] || 40;
+    return base + (level - 5) * 3;
+}
+
 function createCreature(id, name, type, level = 5) {
     const stats = {
         Feu: {
@@ -1152,6 +1223,7 @@ function createCreature(id, name, type, level = 5) {
     const attack = base.attack + levelDiff * 1;
     const defense = base.defense + levelDiff * 1;
     const speed = base.speed + levelDiff * 1;
+    const maxMp = getMaxMpForCreature(type, level);
 
     return {
         uid: Date.now() + Math.random(),
@@ -1165,6 +1237,9 @@ function createCreature(id, name, type, level = 5) {
 
         maxHp,
         hp: maxHp,
+
+        maxMp,
+        mp: maxMp,
 
         attack,
         defense,
@@ -1263,7 +1338,8 @@ function openCreatureMenu(index) {
             <p>
                 Type : ${creature.type}<br>
                 Niveau : ${creature.level}<br>
-                PV : ${creature.hp}/${creature.maxHp}
+                PV : ${creature.hp}/${creature.maxHp}<br>
+                MP : ${creature.mp}/${creature.maxMp}
             </p>
 
             <div class="creature-menu-actions">
@@ -1340,13 +1416,17 @@ function openHealingMenu(index) {
         item => item.id === "potion"
     );
 
+    const etherItems = currentPlayer.inventory.filter(
+        item => item.id === "ether"
+    );
+
     const actions = menu.querySelector(".creature-menu-actions");
 
     if (!actions) return;
 
 
     // Aucun objet de soin
-    if (healingItems.length === 0) {
+    if (healingItems.length === 0 && etherItems.length === 0) {
 
         actions.innerHTML = `
             <p class="no-healing">
@@ -1375,9 +1455,17 @@ function openHealingMenu(index) {
     actions.innerHTML = `
         <h3>💊 Objets de soin</h3>
 
-        <button id="usePotionButton">
-            🧪 Potion (${healingItems.length})
-        </button>
+        ${healingItems.length > 0 ? `
+            <button id="usePotionButton">
+                🧪 Potion (${healingItems.length})
+            </button>
+        ` : ""}
+
+        ${etherItems.length > 0 ? `
+            <button id="useEtherButton">
+                🔷 Élixir (${etherItems.length})
+            </button>
+        ` : ""}
 
         <button id="backCreatureMenu">
             ◀ Retour
@@ -1385,13 +1473,19 @@ function openHealingMenu(index) {
     `;
 
 
-    document
-        .getElementById("usePotionButton")
-        .addEventListener("click", () => {
-
+    const potionBtn = document.getElementById("usePotionButton");
+    if (potionBtn) {
+        potionBtn.addEventListener("click", () => {
             usePotion(index);
-
         });
+    }
+
+    const etherBtn = document.getElementById("useEtherButton");
+    if (etherBtn) {
+        etherBtn.addEventListener("click", () => {
+            useEther(index);
+        });
+    }
 
 
     document
@@ -1462,6 +1556,70 @@ function usePotion(index) {
 
     alert(
         `${creature.name} récupère ${healed} PV !`
+    );
+
+
+    closeCreatureMenu();
+}
+
+
+function useEther(index) {
+
+    const creature = currentPlayer.team[index];
+
+    if (!creature) return;
+
+
+    // Trouver un élixir
+    const etherIndex = currentPlayer.inventory.findIndex(
+        item => item.id === "ether"
+    );
+
+    if (etherIndex === -1) {
+
+        alert("Tu n'as aucun élixir !");
+
+        return;
+    }
+
+
+    // Créature déjà au maximum
+    if (creature.mp >= creature.maxMp) {
+
+        alert(
+            `${creature.name} a déjà tous ses MP !`
+        );
+
+        return;
+    }
+
+
+    const oldMp = creature.mp;
+
+
+    // L'élixir restaure 20 MP
+    creature.mp = Math.min(
+        creature.maxMp,
+        creature.mp + 20
+    );
+
+
+    const restored = creature.mp - oldMp;
+
+
+    // Retirer l'élixir de l'inventaire
+    currentPlayer.inventory.splice(
+        etherIndex,
+        1
+    );
+
+
+    updateTeamDisplay();
+    saveGame();
+
+
+    alert(
+        `${creature.name} récupère ${restored} MP !`
     );
 
 
@@ -1606,22 +1764,30 @@ function applySavedGame(saved) {
     // =========================
 
     // Régénère les attaques d'une sauvegarde faite avant l'ajout des 100
-    // attaques / des types de dégâts (fix #35 et #36) : ces anciennes
-    // créatures n'avaient que 2 attaques, sans champ "type", donc les
-    // avantages de types les traitaient silencieusement comme neutres.
-    // On sauvegarde tout de suite le résultat pour que cette mise à jour ne
-    // se refasse (et ne re-tire pas d'autres attaques au hasard) qu'une
+    // attaques / des types de dégâts / des MP (fix #35, #36 et le système
+    // de MP) : ces anciennes créatures n'avaient pas 4 attaques avec un
+    // champ "type" et un coût en MP, donc les avantages de types et la
+    // gestion des MP les traitaient de façon incorrecte (efficacité neutre,
+    // ou incapables de payer la moindre attaque). On sauvegarde tout de
+    // suite le résultat pour que cette mise à jour ne se refasse qu'une
     // seule fois, même si le joueur recharge la page avant toute autre action.
     let attacksMigrated = false;
 
     [...currentPlayer.team, ...currentPlayer.storage].forEach(creature => {
+
         const outdated =
             !creature.attacks ||
             creature.attacks.length !== MOVES_PER_CREATURE ||
-            creature.attacks.some(move => !move.type);
+            creature.attacks.some(move => !move.type || !move.mpCost);
 
         if (outdated) {
             creature.attacks = pickMovesForCreature(creature.type);
+            attacksMigrated = true;
+        }
+
+        if (typeof creature.maxMp !== "number") {
+            creature.maxMp = getMaxMpForCreature(creature.type, creature.level);
+            creature.mp = creature.maxMp;
             attacksMigrated = true;
         }
     });
@@ -2806,6 +2972,7 @@ function resolveDialogueOutcome(npc) {
 
         currentPlayer.team.forEach(creature => {
             creature.hp = creature.maxHp;
+            creature.mp = creature.maxMp;
             creature.fainted = false;
         });
 
@@ -3089,6 +3256,8 @@ function levelUpCreature(creature) {
     creature.attack += 1;
     creature.defense += 1;
     creature.speed += 1;
+    creature.maxMp += 3;
+    creature.mp += 3;
 
     return tryEvolveCreature(creature);
 }
@@ -3119,6 +3288,8 @@ function tryEvolveCreature(creature) {
     creature.attack += 4;
     creature.defense += 4;
     creature.speed += 3;
+    creature.maxMp += 12;
+    creature.mp += 12;
 
     markPokedexCaught(creature.id);
 
@@ -3184,6 +3355,10 @@ function applyAttack(attacker, defender, move) {
     const { damage, multiplier } = computeDamage(attacker, defender, move);
     defender.hp = Math.max(0, defender.hp - damage);
 
+    if (move && move.mpCost) {
+        attacker.mp = Math.max(0, attacker.mp - move.mpCost);
+    }
+
     const moveName = move ? move.name : "une attaque";
 
     addBattleLog(`${attacker.name} utilise ${moveName} et inflige ${damage} dégâts à ${defender.name} !`);
@@ -3192,6 +3367,15 @@ function applyAttack(attacker, defender, move) {
 
     if (effectivenessMessage) {
         addBattleLog(effectivenessMessage);
+    }
+
+    // Lutte blesse aussi celui qui l'utilise (comme dans les jeux officiels)
+    if (move && move.isStruggle) {
+
+        const recoil = Math.max(1, Math.round(damage * 0.25));
+        attacker.hp = Math.max(0, attacker.hp - recoil);
+
+        addBattleLog(`${attacker.name} est blessé(e) par le contrecoup ! (-${recoil} PV)`);
     }
 }
 
@@ -3254,6 +3438,8 @@ function startBattle(wild, trainerNpc = null) {
                     <span id="battlePlayerType"></span>
                     <div class="battle-hp-bar"><div id="battlePlayerHpFill" class="battle-hp-fill"></div></div>
                     <small id="battlePlayerHpText"></small>
+                    <div class="battle-mp-bar"><div id="battlePlayerMpFill" class="battle-mp-fill"></div></div>
+                    <small id="battlePlayerMpText"></small>
                 </div>
 
                 <div class="battle-vs">VS</div>
@@ -3305,6 +3491,7 @@ function renderBattleActions() {
         <button id="battleAttackButton">⚔️ Attaquer</button>
         ${captureButton}
         <button id="battleHealButton">💊 Soigner</button>
+        <button id="battleEtherButton">🔷 Élixir</button>
         ${fleeButton}
     `;
 
@@ -3321,6 +3508,10 @@ function renderBattleActions() {
         .getElementById("battleHealButton")
         .addEventListener("click", usePotionInBattle);
 
+    document
+        .getElementById("battleEtherButton")
+        .addEventListener("click", useEtherInBattle);
+
     const fleeBtn = document.getElementById("battleFleeButton");
     if (fleeBtn) {
         fleeBtn.addEventListener("click", playerFlee);
@@ -3335,22 +3526,49 @@ function openMoveMenu() {
 
     if (!actionsEl) return;
 
-    const moves = battlePlayerCreature.attacks;
+    const creature = battlePlayerCreature;
+    const moves = creature.attacks;
     const opponentType = battleWildCreature.type;
 
+    // Plus aucune attaque abordable : repli obligatoire sur Lutte
+    if (!hasAffordableMove(creature)) {
+
+        actionsEl.innerHTML = `
+            <p class="pvp-hint">${creature.name} n'a plus assez de MP pour aucune attaque !</p>
+            <button id="battleStruggleButton">🥊 Lutte (contrecoup)</button>
+            <button id="battleMoveBackButton">◀ Retour</button>
+        `;
+
+        document
+            .getElementById("battleStruggleButton")
+            .addEventListener("click", () => playerAttack(STRUGGLE_MOVE));
+
+        document
+            .getElementById("battleMoveBackButton")
+            .addEventListener("click", renderBattleActions);
+
+        return;
+    }
+
     actionsEl.innerHTML =
-        moves.map((move, index) => `
-            <button class="battle-move-button" data-move-index="${index}">
-                <span class="move-button-main">⚔️ ${move.name}</span>
-                <span class="move-button-meta">
-                    ${renderTypeBadge(move.type)}
-                    ${renderMoveEffectivenessBadge(move.type, opponentType)}
-                </span>
-            </button>
-        `).join("") +
+        moves.map((move, index) => {
+
+            const affordable = canAffordMove(creature, move);
+
+            return `
+                <button class="battle-move-button" data-move-index="${index}" ${affordable ? "" : "disabled"}>
+                    <span class="move-button-main">⚔️ ${move.name}</span>
+                    <span class="move-button-meta">
+                        ${renderTypeBadge(move.type)}
+                        ${renderMoveMpBadge(move, creature)}
+                        ${renderMoveEffectivenessBadge(move.type, opponentType)}
+                    </span>
+                </button>
+            `;
+        }).join("") +
         `<button id="battleMoveBackButton">◀ Retour</button>`;
 
-    actionsEl.querySelectorAll(".battle-move-button").forEach(button => {
+    actionsEl.querySelectorAll(".battle-move-button:not([disabled])").forEach(button => {
 
         const move = moves[Number(button.dataset.moveIndex)];
 
@@ -3376,6 +3594,10 @@ function renderBattle(final = false) {
     const playerHpPercent = Math.max(0, Math.min(100, (player.hp / player.maxHp) * 100));
     document.getElementById("battlePlayerHpFill").style.width = `${playerHpPercent}%`;
     document.getElementById("battlePlayerHpText").textContent = `${player.hp}/${player.maxHp} PV`;
+
+    const playerMpPercent = Math.max(0, Math.min(100, (player.mp / player.maxMp) * 100));
+    document.getElementById("battlePlayerMpFill").style.width = `${playerMpPercent}%`;
+    document.getElementById("battlePlayerMpText").textContent = `${player.mp}/${player.maxMp} MP`;
 
     document.getElementById("battleWildSprite").src =
         `fakemon_creatures/${String(wild.id).padStart(3, "0")}.png`;
@@ -3456,6 +3678,59 @@ function usePotionInBattle() {
     }, 700);
 }
 
+function useEtherInBattle() {
+
+    if (!battlePlayerCreature) return;
+
+    if (battleEnded) return;
+
+    const etherIndex = currentPlayer.inventory.findIndex(
+        item => item.id === "ether"
+    );
+
+    if (etherIndex === -1) {
+        addBattleLog("❌ Tu n'as aucun élixir !");
+        renderBattle();
+        return;
+    }
+
+    if (battlePlayerCreature.mp >= battlePlayerCreature.maxMp) {
+        addBattleLog(
+            `${battlePlayerCreature.name} a déjà tous ses MP !`
+        );
+        renderBattle();
+        return;
+    }
+
+    const oldMp = battlePlayerCreature.mp;
+
+    battlePlayerCreature.mp = Math.min(
+        battlePlayerCreature.maxMp,
+        battlePlayerCreature.mp + 20
+    );
+
+    const restored = battlePlayerCreature.mp - oldMp;
+
+    currentPlayer.inventory.splice(etherIndex, 1);
+
+    saveGame();
+
+    addBattleLog(
+        `🔷 ${battlePlayerCreature.name} récupère ${restored} MP !`
+    );
+
+    renderBattle();
+
+    // Le Pokémon sauvage attaque après l'utilisation de l'élixir
+    setTimeout(() => {
+
+        if (battleEnded) return;
+
+        wildAttack();
+
+    }, 700);
+}
+
 function wildAttack() {
 
     if (!battleOpen || battleEnded) return;
@@ -3463,10 +3738,16 @@ function wildAttack() {
     const wild = battleWildCreature;
     const player = battlePlayerCreature;
 
-    applyAttack(wild, player, pickRandomMove(wild));
+    applyAttack(wild, player, pickAffordableMove(wild));
 
     if (player.hp <= 0) {
         handlePlayerFaint();
+        return;
+    }
+
+    // Le sauvage a pu se blesser lui-même avec le contrecoup de Lutte
+    if (wild.hp <= 0) {
+        finishBattleWin();
         return;
     }
 
@@ -3479,7 +3760,7 @@ function playerAttack(move) {
 
     const player = battlePlayerCreature;
     const wild = battleWildCreature;
-    const wildMove = pickRandomMove(wild);
+    const wildMove = pickAffordableMove(wild);
 
     const playerFirst =
         player.speed === wild.speed
@@ -3495,10 +3776,21 @@ function playerAttack(move) {
             return;
         }
 
+        // Contrecoup de Lutte : la créature du joueur peut se blesser elle-même
+        if (player.hp <= 0) {
+            handlePlayerFaint();
+            return;
+        }
+
         applyAttack(wild, player, wildMove);
 
         if (player.hp <= 0) {
             handlePlayerFaint();
+            return;
+        }
+
+        if (wild.hp <= 0) {
+            finishBattleWin();
             return;
         }
 
@@ -3511,10 +3803,20 @@ function playerAttack(move) {
             return;
         }
 
+        if (wild.hp <= 0) {
+            finishBattleWin();
+            return;
+        }
+
         applyAttack(player, wild, move);
 
         if (wild.hp <= 0) {
             finishBattleWin();
+            return;
+        }
+
+        if (player.hp <= 0) {
+            handlePlayerFaint();
             return;
         }
     }
@@ -3551,12 +3853,18 @@ function playerCapture() {
 
     addBattleLog(`La capture a échoué... ${wild.name} riposte !`);
 
-    applyAttack(wild, battlePlayerCreature, pickRandomMove(wild));
+    applyAttack(wild, battlePlayerCreature, pickAffordableMove(wild));
 
     saveGame();
 
     if (battlePlayerCreature.hp <= 0) {
         handlePlayerFaint();
+        return;
+    }
+
+    // Contrecoup de Lutte : le sauvage a pu se blesser lui-même
+    if (wild.hp <= 0) {
+        finishBattleWin();
         return;
     }
 
@@ -3803,6 +4111,8 @@ function buildPvpTeamSnapshot() {
         level: creature.level,
         maxHp: creature.maxHp,
         hp: creature.maxHp,
+        maxMp: creature.maxMp,
+        mp: creature.maxMp,
         attack: creature.attack,
         defense: creature.defense,
         speed: creature.speed,
@@ -4400,6 +4710,8 @@ function openPvpBattleScreen() {
                     <span id="pvpMineType"></span>
                     <div class="battle-hp-bar"><div id="pvpMineHpFill" class="battle-hp-fill"></div></div>
                     <small id="pvpMineHpText"></small>
+                    <div class="battle-mp-bar"><div id="pvpMineMpFill" class="battle-mp-fill"></div></div>
+                    <small id="pvpMineMpText"></small>
                 </div>
 
                 <div class="battle-vs">VS</div>
@@ -4450,6 +4762,10 @@ function renderPvpBattle(row) {
     const mineHpPercent = Math.max(0, Math.min(100, (mine.hp / mine.maxHp) * 100));
     document.getElementById("pvpMineHpFill").style.width = `${mineHpPercent}%`;
     document.getElementById("pvpMineHpText").textContent = `${mine.hp}/${mine.maxHp} PV`;
+
+    const mineMpPercent = Math.max(0, Math.min(100, (mine.mp / mine.maxMp) * 100));
+    document.getElementById("pvpMineMpFill").style.width = `${mineMpPercent}%`;
+    document.getElementById("pvpMineMpText").textContent = `${mine.mp}/${mine.maxMp} MP`;
 
     document.getElementById("pvpOppSprite").src =
         `fakemon_creatures/${String(opp.id).padStart(3, "0")}.png`;
@@ -4542,19 +4858,47 @@ function renderPvpActions(row, isP1, myPseudo, oppPseudo) {
     const oppActiveIndex = isP1 ? row.player2_active : row.player1_active;
     const opponentType = oppTeam[oppActiveIndex].type;
 
-    actionsEl.innerHTML =
-        mine.attacks.map((move, index) => `
-            <button class="battle-move-button" data-move-index="${index}">
-                <span class="move-button-main">⚔️ ${move.name}</span>
-                <span class="move-button-meta">
-                    ${renderTypeBadge(move.type)}
-                    ${renderMoveEffectivenessBadge(move.type, opponentType)}
-                </span>
-            </button>
-        `).join("") +
-        `<button id="pvpForfeitButton" class="pvp-secondary">🏳️ Abandonner</button>`;
+    const forfeitButtonHtml = `<button id="pvpForfeitButton" class="pvp-secondary">🏳️ Abandonner</button>`;
 
-    actionsEl.querySelectorAll(".battle-move-button").forEach(button => {
+    // Plus aucune attaque abordable : repli obligatoire sur Lutte
+    if (!hasAffordableMove(mine)) {
+
+        actionsEl.innerHTML = `
+            <p class="pvp-hint">${mine.name} n'a plus assez de MP pour aucune attaque !</p>
+            <button id="pvpStruggleButton">🥊 Lutte (contrecoup)</button>
+            ${forfeitButtonHtml}
+        `;
+
+        document
+            .getElementById("pvpStruggleButton")
+            .addEventListener("click", submitPvpStruggle);
+
+        document
+            .getElementById("pvpForfeitButton")
+            .addEventListener("click", forfeitPvpMatch);
+
+        return;
+    }
+
+    actionsEl.innerHTML =
+        mine.attacks.map((move, index) => {
+
+            const affordable = canAffordMove(mine, move);
+
+            return `
+                <button class="battle-move-button" data-move-index="${index}" ${affordable ? "" : "disabled"}>
+                    <span class="move-button-main">⚔️ ${move.name}</span>
+                    <span class="move-button-meta">
+                        ${renderTypeBadge(move.type)}
+                        ${renderMoveMpBadge(move, mine)}
+                        ${renderMoveEffectivenessBadge(move.type, opponentType)}
+                    </span>
+                </button>
+            `;
+        }).join("") +
+        forfeitButtonHtml;
+
+    actionsEl.querySelectorAll(".battle-move-button:not([disabled])").forEach(button => {
         const index = Number(button.dataset.moveIndex);
         button.addEventListener("click", () => submitPvpAttack(index));
     });
@@ -4579,6 +4923,26 @@ async function submitPvpAttack(moveIndex) {
         .from("pvp_matches")
         .update({
             [field]: { type: "attack", moveIndex },
+            updated_at: new Date().toISOString()
+        })
+        .eq("code", pvpMatch.code);
+}
+
+async function submitPvpStruggle() {
+
+    const client = getSupabaseClient();
+
+    if (!client || !pvpMatch) return;
+
+    const field = pvpMatch.role === "player1" ? "player1_move" : "player2_move";
+
+    const actionsEl = document.getElementById("pvpActions");
+    if (actionsEl) actionsEl.innerHTML = `<p class="pvp-waiting">En attente de l'adversaire...</p>`;
+
+    await client
+        .from("pvp_matches")
+        .update({
+            [field]: { type: "struggle" },
             updated_at: new Date().toISOString()
         })
         .eq("code", pvpMatch.code);
@@ -4638,11 +5002,11 @@ function computeNextPvpState(row) {
 
     const p1Ready = p1SwitchNeeded
         ? !!row.player1_move && row.player1_move.type === "switch"
-        : (isSwitchRound || (!!row.player1_move && row.player1_move.type === "attack"));
+        : (isSwitchRound || (!!row.player1_move && ["attack", "struggle"].includes(row.player1_move.type)));
 
     const p2Ready = p2SwitchNeeded
         ? !!row.player2_move && row.player2_move.type === "switch"
-        : (isSwitchRound || (!!row.player2_move && row.player2_move.type === "attack"));
+        : (isSwitchRound || (!!row.player2_move && ["attack", "struggle"].includes(row.player2_move.type)));
 
     if (!p1Ready || !p2Ready) return null;
 
@@ -4672,8 +5036,8 @@ function computeNextPvpState(row) {
 
         const a1 = team1[active1];
         const a2 = team2[active2];
-        const move1 = a1.attacks[row.player1_move.moveIndex];
-        const move2 = a2.attacks[row.player2_move.moveIndex];
+        const move1 = row.player1_move.type === "struggle" ? STRUGGLE_MOVE : a1.attacks[row.player1_move.moveIndex];
+        const move2 = row.player2_move.type === "struggle" ? STRUGGLE_MOVE : a2.attacks[row.player2_move.moveIndex];
 
         const p1First = a1.speed === a2.speed ? Math.random() < 0.5 : a1.speed > a2.speed;
         const order = p1First ? [1, 2] : [2, 1];
@@ -4682,27 +5046,43 @@ function computeNextPvpState(row) {
 
             if (side === 1) {
 
-                if (a1.hp <= 0) return;
+                // a2 peut déjà être K.O. si a1 s'est blessé lui-même avec
+                // Lutte lors d'une action précédente de ce même tour
+                if (a1.hp <= 0 || a2.hp <= 0) return;
 
                 const { damage, multiplier } = computeDamage(a1, a2, move1);
                 a2.hp = Math.max(0, a2.hp - damage);
+                a1.mp = Math.max(0, a1.mp - move1.mpCost);
 
                 log.push(`${a1.name} utilise ${move1.name} et inflige ${damage} dégâts à ${a2.name} !`);
                 const message1 = getEffectivenessMessage(multiplier);
                 if (message1) log.push(message1);
                 if (a2.hp <= 0) log.push(`${a2.name} est K.O. !`);
 
+                if (move1.isStruggle) {
+                    const recoil1 = Math.max(1, Math.round(damage * 0.25));
+                    a1.hp = Math.max(0, a1.hp - recoil1);
+                    log.push(`${a1.name} est blessé(e) par le contrecoup ! (-${recoil1} PV)`);
+                }
+
             } else {
 
-                if (a2.hp <= 0) return;
+                if (a2.hp <= 0 || a1.hp <= 0) return;
 
                 const { damage, multiplier } = computeDamage(a2, a1, move2);
                 a1.hp = Math.max(0, a1.hp - damage);
+                a2.mp = Math.max(0, a2.mp - move2.mpCost);
 
                 log.push(`${a2.name} utilise ${move2.name} et inflige ${damage} dégâts à ${a1.name} !`);
                 const message2 = getEffectivenessMessage(multiplier);
                 if (message2) log.push(message2);
                 if (a1.hp <= 0) log.push(`${a1.name} est K.O. !`);
+
+                if (move2.isStruggle) {
+                    const recoil2 = Math.max(1, Math.round(damage * 0.25));
+                    a2.hp = Math.max(0, a2.hp - recoil2);
+                    log.push(`${a2.name} est blessé(e) par le contrecoup ! (-${recoil2} PV)`);
+                }
             }
         });
     }

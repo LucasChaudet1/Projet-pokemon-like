@@ -1079,6 +1079,25 @@ body {
     transition: width 0.2s ease;
 }
 
+.battle-mp-bar {
+    width: 100px;
+    height: 6px;
+
+    background: #d1d5db;
+
+    border-radius: 10px;
+
+    overflow: hidden;
+}
+
+.battle-mp-fill {
+    height: 100%;
+
+    background: #3b82f6;
+
+    transition: width 0.2s ease;
+}
+
 .battle-log {
     height: 110px;
 
@@ -1147,7 +1166,8 @@ body {
 }
 
 .move-type-badge,
-.move-effectiveness {
+.move-effectiveness,
+.move-mp-cost {
     padding: 2px 8px;
     border-radius: 999px;
 
@@ -1155,6 +1175,21 @@ body {
     font-weight: bold;
     text-transform: uppercase;
     letter-spacing: 0.02em;
+}
+
+.move-mp-cost {
+    color: #05224a;
+    background: #93c5fd;
+}
+
+.move-mp-cost-unaffordable {
+    color: white;
+    background: #dc2626;
+}
+
+.battle-move-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 .move-type-badge {
