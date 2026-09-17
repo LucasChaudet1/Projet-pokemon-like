@@ -128,6 +128,16 @@ const ZONE_WILD_DATA = {
 // Toutes les espèces sauvages de base (hors évolutions), à plat pour le Pokédex
 const WILD_CREATURES = Object.values(ZONE_WILD_DATA).flatMap(zone => zone.creatures);
 
+// Zone bonus géante, débloquée après avoir battu la dernière arène : toutes
+// les espèces sauvages du jeu (de toutes les zones) peuvent y apparaître,
+// à un niveau bien plus élevé que partout ailleurs.
+const POSTGAME_ZONE_NAME = "🏔️ Plateau des Légendes";
+ZONE_WILD_DATA[POSTGAME_ZONE_NAME] = {
+    minLevel: 27,
+    maxLevel: 32,
+    creatures: WILD_CREATURES
+};
+
 const WILD_ENCOUNTER_CHANCE = 0.12;
 const WILD_MIN_LEVEL = 2;
 const WILD_MAX_LEVEL = 6;
@@ -781,6 +791,18 @@ const CENTER_NPCS = [
             "Je peux soigner gratuitement toute ton équipe.",
             "Voilà ! Toutes tes créatures sont maintenant en pleine forme !"
         ]
+    },
+    {
+        id: "center_vendor",
+        name: "Vendeur Tom",
+        tileX: 6,
+        tileY: 11,
+        color: "#c2478c",
+        type: "shop",
+        icon: "🛒",
+        lines: [
+            "Bienvenue ! Repose-toi et fais le plein de fournitures avant de repartir à l'aventure."
+        ]
     }
 ];
 
@@ -902,6 +924,10 @@ const GYMS = [
         reward: 250
     }
 ];
+
+// Id de la dernière arène du jeu : sert de condition pour débloquer le
+// Plateau des Légendes, la zone bonus accessible après avoir battu Freya.
+const LAST_GYM_ID = GYMS[GYMS.length - 1].id;
 
 let currentPlayer = {
     pseudo: "",
@@ -1845,11 +1871,20 @@ function applySavedGame(saved) {
 
     if (
         currentPlayer.currentMap === "center" ||
-        currentPlayer.currentMap === "world"
+        currentPlayer.currentMap === "world" ||
+        currentPlayer.currentMap === "postgame"
     ) {
         currentMap = currentPlayer.currentMap;
     } else {
         currentMap = "world";
+    }
+
+    // Le Centre Fakemon de Bourg Palette et celui du Plateau des Légendes
+    // partagent la même salle : on restaure d'où le joueur y était entré
+    // pour que la sortie le ramène au bon endroit après un rechargement.
+    if (currentMap === "center") {
+        centerEntryMap = currentPlayer.centerEntryMap || "world";
+        centerEntryDoor = currentPlayer.centerEntryDoor || { x: 7, y: 4 };
     }
 
 
@@ -1887,6 +1922,8 @@ function applySavedGame(saved) {
 
     if (currentMap === "center") {
         zoneLabel.textContent = "🏥 Centre Fakemon";
+    } else if (currentMap === "postgame") {
+        zoneLabel.textContent = POSTGAME_ZONE_NAME;
     } else {
         zoneLabel.textContent =
             getZoneName(player.tileX, player.tileY);
@@ -2048,6 +2085,26 @@ const TILES = {
 
     GYM_DOOR: {
         color: "#e8c15a",
+        walkable: true
+    },
+
+    // Passage scellé menant au Plateau des Légendes, tout au nord de
+    // Bourg Palette. Reste franchissable dans les deux sens, seule
+    // l'entrée est bloquée tant que la dernière arène n'est pas battue.
+    SUMMIT_GATE: {
+        color: "#c9b6e8",
+        walkable: true,
+        deco: "gate"
+    },
+
+    // Façade de l'immense arène du Maître Pokémon, sur le Plateau des Légendes
+    ARENA_WALL: {
+        color: "#5b2a86",
+        walkable: false
+    },
+
+    ARENA_DOOR: {
+        color: "#f4c430",
         walkable: true
     }
 };
@@ -2295,6 +2352,15 @@ function placeBushes(grid) {
     }
 }
 
+// Emplacement du passage vers le Plateau des Légendes : au tout nord de
+// Bourg Palette, dans le coin libre près du chemin vers la Forêt Sombre.
+const SUMMIT_GATE_X = 13;
+const SUMMIT_GATE_Y = 0;
+
+function placeSummitGate(grid) {
+    grid[SUMMIT_GATE_Y][SUMMIT_GATE_X] = "SUMMIT_GATE";
+}
+
 function buildMap() {
     const grid = [];
     for (let y = 0; y < MAP_ROWS; y++) {
@@ -2327,6 +2393,7 @@ function buildMap() {
     placeEncounterThickets(grid);
     placeBushes(grid);
     placeGyms(grid);
+    placeSummitGate(grid);
 
     return grid;
 }
@@ -2380,6 +2447,19 @@ let currentMap = "world";
 let pcOpen = false;
 let pokedexOpen = false;
 let shopOpen = false;
+
+// Menu de triche (touche C) : réservé au compte "Lucas", permet de donner
+// de l'XP à volonté à une créature de l'équipe pour faciliter les tests.
+let cheatMenuOpen = false;
+
+const CHEAT_ACCOUNT_PSEUDO = "Lucas";
+
+function isCheatAccount() {
+    return (
+        typeof currentPlayer.pseudo === "string" &&
+        currentPlayer.pseudo.trim().toLowerCase() === CHEAT_ACCOUNT_PSEUDO.toLowerCase()
+    );
+}
 
 let encounterOpen = false;
 let wildEncounterCreature = null;
@@ -2498,9 +2578,22 @@ function buildGymMap() {
 
 gymMap = buildGymMap();
 
-function enterCenter() {
+// Un seul Centre Fakemon existe "physiquement" dans le code : celui de
+// Bourg Palette et celui du Plateau des Légendes mènent tous les deux à la
+// même salle. On garde donc en mémoire d'où le joueur est entré (quelle
+// carte, quelle porte) pour l'y ramener exactement à la sortie.
+let centerEntryMap = "world";
+let centerEntryDoor = { x: 7, y: 4 };
+
+function enterCenter(originMap, doorTile) {
+
+    centerEntryMap = originMap || "world";
+    centerEntryDoor = doorTile || { x: 7, y: 4 };
+
     currentMap = "center";
     currentPlayer.currentMap = "center";
+    currentPlayer.centerEntryMap = centerEntryMap;
+    currentPlayer.centerEntryDoor = centerEntryDoor;
 
     player.tileX = Math.floor(CENTER_COLS / 2);
     player.tileY = CENTER_ROWS - 2;
@@ -2520,14 +2613,16 @@ function enterCenter() {
 
 function exitCenter() {
 
-    currentMap = "world";
+    currentMap = centerEntryMap;
+    currentPlayer.currentMap = centerEntryMap;
 
-    currentPlayer.currentMap = "world";
+    // Position devant le Centre par lequel le joueur est entré
+    setPlayerTile(centerEntryDoor.x, centerEntryDoor.y + 1);
 
-    // Position devant le Centre
-    setPlayerTile(7, 5);
-
-    zoneLabel.textContent = "🏘️ Bourg Palette";
+    zoneLabel.textContent =
+        currentMap === "postgame"
+            ? POSTGAME_ZONE_NAME
+            : getZoneName(player.tileX, player.tileY);
 
     saveGame();
 }
@@ -2563,6 +2658,327 @@ function exitGym() {
     }
 
     zoneLabel.textContent = getZoneName(player.tileX, player.tileY);
+
+    saveGame();
+}
+
+// ===================== PLATEAU DES LÉGENDES (ZONE POSTGAME) =====================
+//
+// Carte bonus au nord de Bourg Palette, débloquée une fois la dernière
+// arène battue. Une petite ville (Centre Fakemon + arène du Maître
+// Pokémon + maisons) occupe le centre de la carte, entourée de quelques
+// zones de hautes herbes où absolument toutes les espèces sauvages du jeu
+// peuvent apparaître, à un niveau très élevé (27-32).
+
+const POSTGAME_COLS = 32;
+const POSTGAME_ROWS = 26;
+const POSTGAME_EXIT_X = Math.floor(POSTGAME_COLS / 2);
+
+// Quelques zones de hautes herbes, au nord de la ville
+const POSTGAME_GRASS_FIELDS = [
+    { x0: 2, y0: 2, w: 6, h: 6 },
+    { x0: 13, y0: 2, w: 6, h: 6 },
+    { x0: 23, y0: 2, w: 6, h: 6 }
+];
+
+// Ville du Plateau, avec le Centre Fakemon et l'arène du Maître Pokémon.
+// Réservée au sud de la carte, près de l'entrée : aucune zone de hautes
+// herbes n'y est générée, pour laisser la place aux bâtiments.
+const PG_TOWN_X0 = 7;
+const PG_TOWN_X1 = 25;
+const PG_TOWN_Y0 = 13;
+const PG_TOWN_Y1 = 23;
+
+// Centre Fakemon du Plateau (même gabarit que celui de Bourg Palette : 5
+// cases de large sur 4 de haut, porte au milieu du mur du bas)
+const PG_CENTER_X = 9;
+const PG_CENTER_Y = 14;
+const PG_CENTER_DOOR_X = PG_CENTER_X + 2;
+const PG_CENTER_DOOR_Y = PG_CENTER_Y + 3;
+
+// Immense arène du Maître Pokémon (9 cases de large sur 5 de haut, bien
+// plus grande que les arènes classiques de 3x3)
+const ARENA_BUILD_X = 16;
+const ARENA_BUILD_Y = 14;
+const ARENA_BUILD_W = 9;
+const ARENA_BUILD_H = 5;
+const ARENA_DOOR_X = ARENA_BUILD_X + Math.floor(ARENA_BUILD_W / 2);
+const ARENA_DOOR_Y = ARENA_BUILD_Y + ARENA_BUILD_H - 1;
+
+// Maisons décoratives de la ville : impossible d'y entrer, comme les
+// maisons de Bourg Palette
+const PG_HOUSES = [
+    [8, 15], [8, 21], [14, 15], [14, 22],
+    [23, 20], [19, 13], [11, 21], [17, 21], [21, 13]
+];
+
+let postgameGrid = [];
+
+function placePostgameTown(grid) {
+
+    // Sol de la ville : herbe classique, comme le reste du monde
+    for (let y = PG_TOWN_Y0; y <= PG_TOWN_Y1; y++) {
+        for (let x = PG_TOWN_X0; x <= PG_TOWN_X1; x++) {
+            grid[y][x] = "GRASS";
+        }
+    }
+
+    // Centre Fakemon
+    for (let y = PG_CENTER_Y; y < PG_CENTER_Y + 4; y++) {
+        for (let x = PG_CENTER_X; x < PG_CENTER_X + 5; x++) {
+            grid[y][x] = "CENTER_WALL";
+        }
+    }
+    grid[PG_CENTER_DOOR_Y][PG_CENTER_DOOR_X] = "CENTER_DOOR";
+    grid[PG_CENTER_DOOR_Y + 1][PG_CENTER_DOOR_X] = "GRASS";
+
+    // Immense arène du Maître Pokémon
+    for (let y = ARENA_BUILD_Y; y < ARENA_BUILD_Y + ARENA_BUILD_H; y++) {
+        for (let x = ARENA_BUILD_X; x < ARENA_BUILD_X + ARENA_BUILD_W; x++) {
+            grid[y][x] = "ARENA_WALL";
+        }
+    }
+    grid[ARENA_DOOR_Y][ARENA_DOOR_X] = "ARENA_DOOR";
+    grid[ARENA_DOOR_Y + 1][ARENA_DOOR_X] = "GRASS";
+
+    // Maisons (non franchissables, purement décoratives)
+    PG_HOUSES.forEach(([x, y]) => {
+        grid[y][x] = "HOUSE";
+    });
+}
+
+function buildPostgameMap() {
+
+    const grid = [];
+
+    // Base : un réseau de chemins qui relie toutes les zones entre elles
+    for (let y = 0; y < POSTGAME_ROWS; y++) {
+        const row = [];
+        for (let x = 0; x < POSTGAME_COLS; x++) {
+            row.push("PATH");
+        }
+        grid.push(row);
+    }
+
+    // Quelques zones de hautes herbes, au nord de la ville
+    POSTGAME_GRASS_FIELDS.forEach(field => {
+        for (let y = field.y0; y < field.y0 + field.h; y++) {
+            for (let x = field.x0; x < field.x0 + field.w; x++) {
+                grid[y][x] = "TALL_GRASS";
+            }
+        }
+    });
+
+    const overlapsTown = (x0, y0, x1, y1) =>
+        !(x1 < PG_TOWN_X0 || x0 > PG_TOWN_X1 || y1 < PG_TOWN_Y0 || y0 > PG_TOWN_Y1);
+
+    placePostgameTown(grid);
+
+    // Bordure d'arbres infranchissable tout autour de la carte
+    for (let x = 0; x < POSTGAME_COLS; x++) {
+        grid[0][x] = "TREE";
+        grid[POSTGAME_ROWS - 1][x] = "TREE";
+    }
+    for (let y = 0; y < POSTGAME_ROWS; y++) {
+        grid[y][0] = "TREE";
+        grid[y][POSTGAME_COLS - 1] = "TREE";
+    }
+
+    // Entrée/sortie au sud, toujours praticable
+    grid[POSTGAME_ROWS - 1][POSTGAME_EXIT_X] = "PATH";
+    grid[POSTGAME_ROWS - 2][POSTGAME_EXIT_X] = "PATH";
+
+    // Quelques rochers décoratifs le long des chemins, en dehors de la ville
+    for (let y = 1; y < POSTGAME_ROWS - 1; y++) {
+        for (let x = 1; x < POSTGAME_COLS - 1; x++) {
+            if (
+                grid[y][x] === "PATH" &&
+                x !== POSTGAME_EXIT_X &&
+                !overlapsTown(x, y, x, y) &&
+                (x * 7 + y * 13) % 29 === 0
+            ) {
+                grid[y][x] = "ROCK";
+            }
+        }
+    }
+
+    return grid;
+}
+
+postgameGrid = buildPostgameMap();
+
+function enterPostgame() {
+
+    currentMap = "postgame";
+    currentPlayer.currentMap = "postgame";
+
+    player.tileX = POSTGAME_EXIT_X;
+    player.tileY = POSTGAME_ROWS - 2;
+
+    player.pixelX = player.tileX * TILE_SIZE;
+    player.pixelY = player.tileY * TILE_SIZE;
+
+    player.targetPixelX = player.pixelX;
+    player.targetPixelY = player.pixelY;
+
+    player.moving = false;
+
+    zoneLabel.textContent = POSTGAME_ZONE_NAME;
+
+    saveGame();
+}
+
+function exitPostgame() {
+
+    currentMap = "world";
+    currentPlayer.currentMap = "world";
+
+    // Position juste devant le passage scellé, à Bourg Palette
+    setPlayerTile(SUMMIT_GATE_X, SUMMIT_GATE_Y + 1);
+
+    zoneLabel.textContent = getZoneName(player.tileX, player.tileY);
+
+    saveGame();
+}
+
+// ===================== ARÈNE DU MAÎTRE POKÉMON =====================
+//
+// Immense salle (bien plus grande que les arènes classiques 20x15) située
+// dans la ville du Plateau des Légendes. Un anneau de public occupe tout le
+// pourtour de la salle, et le Maître Pokémon attend en plein milieu du
+// terrain pour le combat le plus difficile du jeu.
+
+const ARENA_COLS = 30;
+const ARENA_ROWS = 24;
+const CHAMPION_X = Math.floor(ARENA_COLS / 2);
+const CHAMPION_Y = Math.floor(ARENA_ROWS / 2);
+
+// Le Maître Pokémon utilise les formes finales des trois starters, à un
+// niveau supérieur à tout ce que le joueur a pu croiser jusque-là.
+const CHAMPION = {
+    id: "champion_plateau",
+    leaderName: "Maître Orion",
+    badge: "Badge Suprême",
+    icon: "👑",
+    color: "#5b2a86",
+    lines: [
+        "Bienvenue au sommet du Plateau des Légendes.",
+        "Je suis le Maître Pokémon. Seuls les dresseurs les plus forts osent m'affronter ici !"
+    ],
+    defeatedLine: "Incroyable... tu as ce qu'il faut pour être un vrai Maître Pokémon.",
+    requiresGymId: null,
+    team: [
+        { speciesId: 3, level: 38 },
+        { speciesId: 6, level: 38 },
+        { speciesId: 9, level: 40 }
+    ],
+    reward: 1000
+};
+
+let arenaMap = [];
+
+function buildArenaMap() {
+
+    const grid = [];
+
+    for (let y = 0; y < ARENA_ROWS; y++) {
+
+        const row = [];
+
+        for (let x = 0; x < ARENA_COLS; x++) {
+
+            const isOuterWall =
+                x === 0 || x === ARENA_COLS - 1 ||
+                y === 0 || y === ARENA_ROWS - 1;
+
+            // Anneau de gradins (public), infranchissable comme les murs
+            const isStands =
+                x === 1 || x === ARENA_COLS - 2 ||
+                y === 1 || y === ARENA_ROWS - 2;
+
+            if (isOuterWall || isStands) {
+                row.push("GYM_WALL");
+            } else {
+                row.push("PATH");
+            }
+        }
+
+        grid.push(row);
+    }
+
+    // Porte de sortie et couloir d'entrée qui traverse l'anneau de gradins
+    grid[ARENA_ROWS - 1][CHAMPION_X] = "GYM_DOOR";
+    grid[ARENA_ROWS - 2][CHAMPION_X] = "PATH";
+
+    return grid;
+}
+
+arenaMap = buildArenaMap();
+
+// Construit un objet "NPC" pour le Maître Pokémon, réutilisable tel quel
+// par le système de dialogue et de combat de dresseur existant.
+function buildChampionNpc() {
+    return {
+        id: CHAMPION.id,
+        name: CHAMPION.leaderName,
+
+        tileX: CHAMPION_X,
+        tileY: CHAMPION_Y,
+
+        color: CHAMPION.color,
+        type: "battle",
+        icon: CHAMPION.icon,
+
+        lines: CHAMPION.lines,
+        defeatedLine: CHAMPION.defeatedLine,
+        requiresGymId: CHAMPION.requiresGymId,
+        team: CHAMPION.team,
+        reward: CHAMPION.reward,
+        badge: CHAMPION.badge
+    };
+}
+
+function checkChampionInteraction() {
+
+    if (currentMap !== "champion_arena") return false;
+    if (player.moving) return false;
+
+    const facing = getFacingTile();
+
+    if (facing.x !== CHAMPION_X || facing.y !== CHAMPION_Y) {
+        return false;
+    }
+
+    startDialogue(buildChampionNpc());
+
+    return true;
+}
+
+function enterChampionArena() {
+
+    currentMap = "champion_arena";
+
+    player.tileX = CHAMPION_X;
+    player.tileY = ARENA_ROWS - 2;
+
+    player.pixelX = player.tileX * TILE_SIZE;
+    player.pixelY = player.tileY * TILE_SIZE;
+
+    player.targetPixelX = player.pixelX;
+    player.targetPixelY = player.pixelY;
+
+    player.moving = false;
+
+    zoneLabel.textContent = `👑 Arène de ${CHAMPION.leaderName}`;
+}
+
+function exitChampionArena() {
+
+    currentMap = "postgame";
+
+    setPlayerTile(ARENA_DOOR_X, ARENA_DOOR_Y + 1);
+
+    zoneLabel.textContent = POSTGAME_ZONE_NAME;
 
     saveGame();
 }
@@ -2640,6 +3056,16 @@ document.addEventListener("keydown", (e) => {
         return;
     }
 
+    // Menu de triche ouvert
+    if (cheatMenuOpen) {
+
+        if (key === "c" || key === "Escape") {
+            closeCheatMenu();
+        }
+
+        return;
+    }
+
     // Menu ou combat PvP ouvert (le déplacement est bloqué dans tous les cas ;
     // Échap ne ferme que l'écran de création/connexion, jamais un combat ou
     // une recherche d'adversaire en cours)
@@ -2663,11 +3089,17 @@ document.addEventListener("keydown", (e) => {
         return;
     }
 
-    // Interaction avec un PNJ, un maître d'arène ou le PC
+    // Interaction avec un PNJ, un maître d'arène, le Maître Pokémon ou le PC
     if (key === "e") {
-        if (!checkNPCInteraction() && !checkGymLeaderInteraction()) {
+        if (!checkNPCInteraction() && !checkGymLeaderInteraction() && !checkChampionInteraction()) {
             checkPCInteraction();
         }
+        return;
+    }
+
+    // Menu de triche (réservé au compte "Lucas")
+    if (key === "c" && isCheatAccount()) {
+        openCheatMenu();
         return;
     }
 
@@ -2776,6 +3208,62 @@ function tryMove(dx, dy, direction) {
         }
 
         if (newX === GYM_LEADER_X && newY === GYM_LEADER_Y) {
+            return;
+        }
+
+        player.tileX = newX;
+        player.tileY = newY;
+
+        player.targetPixelX = newX * TILE_SIZE;
+        player.targetPixelY = newY * TILE_SIZE;
+
+        player.moving = true;
+    }
+
+    if (currentMap === "postgame") {
+
+        if (
+            newX < 0 ||
+            newX >= POSTGAME_COLS ||
+            newY < 0 ||
+            newY >= POSTGAME_ROWS
+        ) {
+            return;
+        }
+
+        const tile = TILES[postgameGrid[newY][newX]];
+
+        if (!tile.walkable) {
+            return;
+        }
+
+        player.tileX = newX;
+        player.tileY = newY;
+
+        player.targetPixelX = newX * TILE_SIZE;
+        player.targetPixelY = newY * TILE_SIZE;
+
+        player.moving = true;
+    }
+
+    if (currentMap === "champion_arena") {
+
+        if (
+            newX < 0 ||
+            newX >= ARENA_COLS ||
+            newY < 0 ||
+            newY >= ARENA_ROWS
+        ) {
+            return;
+        }
+
+        const tile = TILES[arenaMap[newY][newX]];
+
+        if (!tile.walkable) {
+            return;
+        }
+
+        if (newX === CHAMPION_X && newY === CHAMPION_Y) {
             return;
         }
 
@@ -3080,13 +3568,24 @@ function checkBuildingInteraction() {
     if (player.moving) return;
 
 
-    // Entrée dans le Centre
+    // Entrée dans le Centre de Bourg Palette
     if (
         currentMap === "world" &&
         player.tileX === 7 &&
         player.tileY === 4
     ) {
-        enterCenter();
+        enterCenter("world", { x: 7, y: 4 });
+        return;
+    }
+
+
+    // Entrée dans le Centre du Plateau des Légendes
+    if (
+        currentMap === "postgame" &&
+        player.tileX === PG_CENTER_DOOR_X &&
+        player.tileY === PG_CENTER_DOOR_Y
+    ) {
+        enterCenter("postgame", { x: PG_CENTER_DOOR_X, y: PG_CENTER_DOOR_Y });
         return;
     }
 
@@ -3121,15 +3620,72 @@ function checkBuildingInteraction() {
         player.tileY === GYM_ROWS - 1
     ) {
         exitGym();
+        return;
+    }
+
+
+    // Passage scellé vers le Plateau des Légendes : ne s'ouvre qu'une fois
+    // la dernière arène du jeu battue
+    if (
+        currentMap === "world" &&
+        player.tileX === SUMMIT_GATE_X &&
+        player.tileY === SUMMIT_GATE_Y
+    ) {
+        if (currentPlayer.defeatedTrainers.includes(LAST_GYM_ID)) {
+            enterPostgame();
+        } else {
+            alert(
+                "Un sceau ancien bloque ce passage... Il ne s'ouvrira qu'après ta victoire face à la dernière Arène."
+            );
+        }
+        return;
+    }
+
+
+    // Sortie du Plateau des Légendes
+    if (
+        currentMap === "postgame" &&
+        player.tileX === POSTGAME_EXIT_X &&
+        player.tileY === POSTGAME_ROWS - 1
+    ) {
+        exitPostgame();
+        return;
+    }
+
+
+    // Entrée dans l'arène du Maître Pokémon
+    if (
+        currentMap === "postgame" &&
+        player.tileX === ARENA_DOOR_X &&
+        player.tileY === ARENA_DOOR_Y
+    ) {
+        enterChampionArena();
+        return;
+    }
+
+
+    // Sortie de l'arène du Maître Pokémon
+    if (
+        currentMap === "champion_arena" &&
+        player.tileY === ARENA_ROWS - 1
+    ) {
+        exitChampionArena();
     }
 }
 
 function checkWildEncounter() {
 
-    if (currentMap !== "world") return;
     if (encounterOpen) return;
 
-    const tile = TILES[mapGrid[player.tileY][player.tileX]];
+    let tile;
+
+    if (currentMap === "world") {
+        tile = TILES[mapGrid[player.tileY][player.tileX]];
+    } else if (currentMap === "postgame") {
+        tile = TILES[postgameGrid[player.tileY][player.tileX]];
+    } else {
+        return;
+    }
 
     if (!tile.encounterZone) return;
 
@@ -3140,7 +3696,10 @@ function checkWildEncounter() {
 
 function pickRandomWildCreature() {
 
-    const zoneName = getZoneName(player.tileX, player.tileY);
+    const zoneName =
+        currentMap === "postgame"
+            ? POSTGAME_ZONE_NAME
+            : getZoneName(player.tileX, player.tileY);
     const zoneData = ZONE_WILD_DATA[zoneName];
 
     const pool = zoneData ? zoneData.creatures : WILD_CREATURES;
@@ -6231,21 +6790,17 @@ function drawCenterInterior() {
     );
 
     // =========================
-    // INFIRMIÈRE
+    // PNJ DU CENTRE (infirmière, vendeur, ...)
     // =========================
 
-    const nurse = CENTER_NPCS
-        ? CENTER_NPCS[0]
-        : null;
-
-    if (nurse) {
+    CENTER_NPCS.forEach(npc => {
 
         drawNPC(
-            nurse.tileX * TILE_SIZE,
-            nurse.tileY * TILE_SIZE,
-            nurse
+            npc.tileX * TILE_SIZE,
+            npc.tileY * TILE_SIZE,
+            npc
         );
-    }
+    });
 
     // =========================
     // ZONE DE SOIN
@@ -6541,6 +7096,144 @@ function drawGymInterior() {
     ctx.textAlign = "left";
 }
 
+// Dessine un unique spectateur (tête + corps) dans les gradins
+function drawArenaSpectator(px, py, seed) {
+
+    const colors = ["#f87171", "#fbbf24", "#34d399", "#60a5fa", "#c084fc", "#f472b6"];
+
+    ctx.fillStyle = colors[seed % colors.length];
+    ctx.beginPath();
+    ctx.arc(px, py + 4, 8, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = "#f2d6b3";
+    ctx.beginPath();
+    ctx.arc(px, py - 6, 5, 0, Math.PI * 2);
+    ctx.fill();
+}
+
+// Rangée de spectateurs le long d'une ligne horizontale de gradins (laisse
+// le couloir d'entrée dégagé au niveau de CHAMPION_X)
+function drawArenaCrowdRow(xStartTile, xEndTile, yTile) {
+
+    let seed = 0;
+
+    for (let x = xStartTile; x <= xEndTile; x++) {
+
+        if (x === CHAMPION_X) continue;
+
+        drawArenaSpectator(
+            x * TILE_SIZE + TILE_SIZE / 2,
+            yTile * TILE_SIZE + TILE_SIZE / 2,
+            seed
+        );
+
+        seed++;
+    }
+}
+
+// Colonne de spectateurs le long d'une ligne verticale de gradins
+function drawArenaCrowdColumn(yStartTile, yEndTile, xTile) {
+
+    let seed = 0;
+
+    for (let y = yStartTile; y <= yEndTile; y++) {
+
+        drawArenaSpectator(
+            xTile * TILE_SIZE + TILE_SIZE / 2,
+            y * TILE_SIZE + TILE_SIZE / 2,
+            seed
+        );
+
+        seed++;
+    }
+}
+
+// Immense salle de l'arène du Maître Pokémon : même style que les arènes
+// classiques (drawGymInterior), mais à l'échelle d'un stade, avec un public
+// tout autour du terrain et le Maître Pokémon en plein milieu.
+function drawArenaInterior() {
+
+    const W = ARENA_COLS * TILE_SIZE;
+    const H = ARENA_ROWS * TILE_SIZE;
+
+    // Fond
+    ctx.fillStyle = "#efeaf9";
+    ctx.fillRect(0, 0, W, H);
+
+    // Sol en carreaux
+    for (let y = 1; y < ARENA_ROWS - 1; y++) {
+        for (let x = 1; x < ARENA_COLS - 1; x++) {
+
+            ctx.fillStyle =
+                (x + y) % 2 === 0
+                    ? "#f4f0fb"
+                    : "#e6ddf5";
+
+            ctx.fillRect(
+                x * TILE_SIZE,
+                y * TILE_SIZE,
+                TILE_SIZE,
+                TILE_SIZE
+            );
+        }
+    }
+
+    // Mur du haut
+    ctx.fillStyle = CHAMPION.color;
+    ctx.fillRect(0, 0, W, TILE_SIZE);
+
+    // Public tout autour du terrain
+    drawArenaCrowdRow(1, ARENA_COLS - 2, 1);
+    drawArenaCrowdRow(1, ARENA_COLS - 2, ARENA_ROWS - 2);
+    drawArenaCrowdColumn(1, ARENA_ROWS - 2, 1);
+    drawArenaCrowdColumn(1, ARENA_ROWS - 2, ARENA_COLS - 2);
+
+    // Plantes dans les coins du terrain
+    drawCenterPlant(3 * TILE_SIZE, 3 * TILE_SIZE);
+    drawCenterPlant((ARENA_COLS - 4) * TILE_SIZE, 3 * TILE_SIZE);
+    drawCenterPlant(3 * TILE_SIZE, (ARENA_ROWS - 4) * TILE_SIZE);
+    drawCenterPlant((ARENA_COLS - 4) * TILE_SIZE, (ARENA_ROWS - 4) * TILE_SIZE);
+
+    // Estrade centrale du Maître Pokémon
+    const platformX = CHAMPION_X * TILE_SIZE;
+    const platformY = CHAMPION_Y * TILE_SIZE;
+    const platformRadius = 70;
+
+    drawGlow(platformX, platformY, platformRadius + 15, CHAMPION.color, 0.18);
+
+    ctx.fillStyle = CHAMPION.color;
+    ctx.beginPath();
+    ctx.arc(platformX, platformY, platformRadius, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = "#ffffff";
+    ctx.beginPath();
+    ctx.arc(platformX, platformY, platformRadius - 16, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.font = "44px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText(CHAMPION.icon, platformX, platformY + 16);
+    ctx.textAlign = "left";
+
+    // Le Maître Pokémon, en plein milieu de l'arène
+    drawNPC(platformX, platformY, buildChampionNpc());
+
+    // Titre
+    ctx.fillStyle = "#333";
+    ctx.font = "bold 22px Arial";
+    ctx.textAlign = "center";
+
+    ctx.fillText(
+        `ARÈNE DE ${CHAMPION.leaderName.toUpperCase()}`,
+        W / 2,
+        30
+    );
+
+    ctx.textAlign = "left";
+}
+
 function openPC() {
     pcOpen = true;
     pressedKeys.clear();
@@ -6755,6 +7448,136 @@ function closeShop() {
 
     if (shopWindow) {
         shopWindow.remove();
+    }
+}
+
+// ===================== MENU DE TRICHE (compte "Lucas") =====================
+//
+// Débloqué uniquement pour le compte dont le pseudo est "Lucas" (voir
+// isCheatAccount()). Touche C : donne une quantité d'XP au choix à
+// n'importe quelle créature de l'équipe, pour tester rapidement montées de
+// niveau et évolutions sans avoir à enchaîner des combats.
+
+function openCheatMenu() {
+
+    if (!isCheatAccount()) return;
+
+    cheatMenuOpen = true;
+    pressedKeys.clear();
+
+    const cheatWindow = document.createElement("div");
+
+    cheatWindow.id = "cheatWindow";
+
+    cheatWindow.innerHTML = `
+        <div class="pc-box">
+
+            <div class="pc-header">
+                <h2>🛠️ Menu de triche</h2>
+                <button id="closeCheatButton">✕</button>
+            </div>
+
+            <div id="cheatList"></div>
+
+            <p class="pc-hint">
+                Appuie sur <strong>C</strong> ou <strong>Échap</strong> pour fermer
+            </p>
+
+        </div>
+    `;
+
+    document.body.appendChild(cheatWindow);
+
+    document
+        .getElementById("closeCheatButton")
+        .addEventListener("click", closeCheatMenu);
+
+    updateCheatMenuDisplay();
+}
+
+function closeCheatMenu() {
+
+    cheatMenuOpen = false;
+
+    const cheatWindow = document.getElementById("cheatWindow");
+
+    if (cheatWindow) {
+        cheatWindow.remove();
+    }
+}
+
+function updateCheatMenuDisplay() {
+
+    const cheatList = document.getElementById("cheatList");
+
+    if (!cheatList) return;
+
+    cheatList.innerHTML = "";
+
+    if (currentPlayer.team.length === 0) {
+        cheatList.innerHTML = `<p class="empty-storage">Aucune créature dans l'équipe.</p>`;
+        return;
+    }
+
+    currentPlayer.team.forEach((creature, index) => {
+
+        const card = document.createElement("div");
+
+        card.className = "cheat-creature";
+
+        card.innerHTML = `
+            <img
+                src="fakemon_creatures/${String(creature.id).padStart(3, "0")}.png"
+                alt="${creature.name}"
+            >
+
+            <div class="cheat-creature-info">
+                <strong>${creature.name}</strong>
+                <span>Nv. ${creature.level} — ${creature.xp}/${xpForNextLevel(creature.level)} XP</span>
+            </div>
+
+            <input
+                type="number"
+                class="cheat-xp-input"
+                id="cheatXpInput${index}"
+                value="100"
+                min="1"
+            >
+
+            <button class="cheat-xp-button" id="cheatXpButton${index}">
+                Donner XP
+            </button>
+        `;
+
+        cheatList.appendChild(card);
+
+        document
+            .getElementById(`cheatXpButton${index}`)
+            .addEventListener("click", () => {
+                giveCheatXp(index);
+            });
+    });
+}
+
+function giveCheatXp(index) {
+
+    const creature = currentPlayer.team[index];
+
+    if (!creature) return;
+
+    const input = document.getElementById(`cheatXpInput${index}`);
+    const amount = input ? parseInt(input.value, 10) : NaN;
+
+    if (!amount || amount <= 0) return;
+
+    const levelUpMessages = gainXP(creature, amount);
+
+    updateTeamDisplay();
+    updateCheatMenuDisplay();
+    saveGame();
+
+    if (levelUpMessages.length > 0) {
+        alert(levelUpMessages.join("\n"));
     }
 }
 
@@ -7241,8 +8064,8 @@ function drawCenterBuilding(screenX, screenY) {
     );
 }
 
-function drawTile(x, y, screenX, screenY) {
-    const tileKey = mapGrid[y][x];
+function drawTile(x, y, screenX, screenY, grid) {
+    const tileKey = (grid || mapGrid)[y][x];
     const tile = TILES[tileKey];
 
     ctx.fillStyle = tile.color;
@@ -7385,6 +8208,22 @@ function drawTile(x, y, screenX, screenY) {
         ctx.beginPath();
         ctx.arc(screenX + TILE_SIZE / 2, screenY + 6, 4, 0, Math.PI * 2);
         ctx.fill();
+    } else if (tile.deco === "gate") {
+
+        // Piliers du passage scellé
+        ctx.fillStyle = "#6b5b95";
+        ctx.fillRect(screenX + 3, screenY + 6, 6, TILE_SIZE - 6);
+        ctx.fillRect(screenX + TILE_SIZE - 9, screenY + 6, 6, TILE_SIZE - 6);
+
+        // Linteau
+        ctx.fillStyle = "#8a6dae";
+        ctx.fillRect(screenX + 2, screenY + 2, TILE_SIZE - 4, 6);
+
+        // Éclat mystique au centre
+        ctx.fillStyle = "rgba(255, 255, 255, 0.65)";
+        ctx.beginPath();
+        ctx.arc(screenX + TILE_SIZE / 2, screenY + TILE_SIZE / 2 + 2, 4, 0, Math.PI * 2);
+        ctx.fill();
     } else if (tileKey === "WATER") {
 
         const wave =
@@ -7483,6 +8322,53 @@ function drawTile(x, y, screenX, screenY) {
 
             // Ligne de brique légère sur les autres murs
             ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(screenX, screenY + TILE_SIZE / 2);
+            ctx.lineTo(screenX + TILE_SIZE, screenY + TILE_SIZE / 2);
+            ctx.stroke();
+        }
+
+    } else if (tileKey === "ARENA_WALL" || tileKey === "ARENA_DOOR") {
+
+        if (tileKey === "ARENA_DOOR") {
+
+            // Grande porte de l'arène
+            ctx.fillStyle = "#3b2411";
+            ctx.fillRect(
+                screenX + 7,
+                screenY + 8,
+                TILE_SIZE - 14,
+                TILE_SIZE - 8
+            );
+
+        } else if (x === ARENA_DOOR_X && y === ARENA_BUILD_Y) {
+
+            // Emblème du Maître Pokémon, au sommet de l'arène
+            ctx.fillStyle = "#ffffff";
+            ctx.beginPath();
+            ctx.arc(
+                screenX + TILE_SIZE / 2,
+                screenY + TILE_SIZE / 2,
+                12,
+                0,
+                Math.PI * 2
+            );
+            ctx.fill();
+
+            ctx.font = "16px Arial";
+            ctx.textAlign = "center";
+            ctx.fillText(
+                "👑",
+                screenX + TILE_SIZE / 2,
+                screenY + TILE_SIZE / 2 + 5
+            );
+            ctx.textAlign = "left";
+
+        } else {
+
+            // Ligne de brique légère sur le reste de la façade
+            ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
             ctx.lineWidth = 1;
             ctx.beginPath();
             ctx.moveTo(screenX, screenY + TILE_SIZE / 2);
@@ -7871,6 +8757,28 @@ function updateZoneLabel() {
         return;
     }
 
+    if (currentMap === "postgame") {
+
+        if (lastZone !== POSTGAME_ZONE_NAME) {
+            zoneLabel.textContent = POSTGAME_ZONE_NAME;
+            lastZone = POSTGAME_ZONE_NAME;
+        }
+
+        return;
+    }
+
+    if (currentMap === "champion_arena") {
+
+        const label = `👑 Arène de ${CHAMPION.leaderName}`;
+
+        if (lastZone !== label) {
+            zoneLabel.textContent = label;
+            lastZone = label;
+        }
+
+        return;
+    }
+
 
     const zone = getZoneName(
         player.tileX,
@@ -7971,6 +8879,114 @@ function render() {
             player.pixelX,
             player.pixelY
         );
+
+        return;
+    }
+
+
+    // =========================
+    // ARÈNE DU MAÎTRE POKÉMON
+    // =========================
+    //
+    // Salle bien plus grande que le canvas : on la dessine comme une pièce
+    // classique (mêmes fonctions que les autres intérieurs), mais avec un
+    // défilement de caméra centré sur le joueur, exactement comme pour le
+    // monde extérieur et le Plateau des Légendes.
+
+    if (currentMap === "champion_arena") {
+
+        ctx.clearRect(
+            0,
+            0,
+            canvas.width,
+            canvas.height
+        );
+
+        const arenaCameraX = clamp(
+            player.pixelX + TILE_SIZE / 2 - canvas.width / 2,
+            0,
+            ARENA_COLS * TILE_SIZE - canvas.width
+        );
+
+        const arenaCameraY = clamp(
+            player.pixelY + TILE_SIZE / 2 - canvas.height / 2,
+            0,
+            ARENA_ROWS * TILE_SIZE - canvas.height
+        );
+
+        ctx.save();
+        ctx.translate(-arenaCameraX, -arenaCameraY);
+
+        drawArenaInterior();
+
+        ctx.restore();
+
+        drawPlayer(
+            player.pixelX - arenaCameraX,
+            player.pixelY - arenaCameraY
+        );
+
+        updateZoneLabel();
+
+        return;
+    }
+
+
+    // =========================
+    // PLATEAU DES LÉGENDES (POSTGAME)
+    // =========================
+
+    if (currentMap === "postgame") {
+
+        ctx.clearRect(
+            0,
+            0,
+            canvas.width,
+            canvas.height
+        );
+
+        const gameCameraX = clamp(
+            player.pixelX + TILE_SIZE / 2 - canvas.width / 2,
+            0,
+            POSTGAME_COLS * TILE_SIZE - canvas.width
+        );
+
+        const gameCameraY = clamp(
+            player.pixelY + TILE_SIZE / 2 - canvas.height / 2,
+            0,
+            POSTGAME_ROWS * TILE_SIZE - canvas.height
+        );
+
+        const pgStartCol = Math.max(0, Math.floor(gameCameraX / TILE_SIZE));
+        const pgEndCol = Math.min(
+            POSTGAME_COLS - 1,
+            Math.ceil((gameCameraX + canvas.width) / TILE_SIZE)
+        );
+
+        const pgStartRow = Math.max(0, Math.floor(gameCameraY / TILE_SIZE));
+        const pgEndRow = Math.min(
+            POSTGAME_ROWS - 1,
+            Math.ceil((gameCameraY + canvas.height) / TILE_SIZE)
+        );
+
+        for (let y = pgStartRow; y <= pgEndRow; y++) {
+            for (let x = pgStartCol; x <= pgEndCol; x++) {
+                drawTile(
+                    x,
+                    y,
+                    x * TILE_SIZE - gameCameraX,
+                    y * TILE_SIZE - gameCameraY,
+                    postgameGrid
+                );
+            }
+        }
+
+        drawPlayer(
+            player.pixelX - gameCameraX,
+            player.pixelY - gameCameraY
+        );
+
+        updateZoneLabel();
 
         return;
     }
