@@ -331,29 +331,143 @@ function markPokedexCaught(id) {
     }
 }
 
-// Attaques apprises par une créature selon son type
+// Attaques apprenables par une créature selon son type : 25 par type (100
+// au total), pour que deux créatures du même type puissent avoir un style
+// de combat différent une fois que chacune en a appris un sous-ensemble.
 const MOVE_POOL = {
     Feu: [
-        { name: "Griffe", power: 1 },
-        { name: "Lance-Flammes", power: 1.35 }
+        { name: "Griffe Ardente", power: 1.00 },
+        { name: "Lance-Flammes", power: 1.35 },
+        { name: "Étincelle", power: 0.75 },
+        { name: "Souffle Brûlant", power: 1.10 },
+        { name: "Éruption", power: 1.55 },
+        { name: "Flammèche", power: 0.80 },
+        { name: "Brasier", power: 1.30 },
+        { name: "Onde de Chaleur", power: 1.15 },
+        { name: "Combustion", power: 1.25 },
+        { name: "Feu Follet", power: 0.85 },
+        { name: "Explosion Solaire", power: 1.60 },
+        { name: "Vague de Chaleur", power: 1.05 },
+        { name: "Cendres Ardentes", power: 0.90 },
+        { name: "Colère du Volcan", power: 1.45 },
+        { name: "Danse des Flammes", power: 1.00 },
+        { name: "Jet de Lave", power: 1.40 },
+        { name: "Morsure Enflammée", power: 1.20 },
+        { name: "Tourbillon de Feu", power: 1.30 },
+        { name: "Impact Solaire", power: 1.35 },
+        { name: "Rugissement Ardent", power: 1.15 },
+        { name: "Cœur de Magma", power: 1.50 },
+        { name: "Pluie de Braises", power: 0.95 },
+        { name: "Souffle du Dragon Rouge", power: 1.45 },
+        { name: "Flamme Éternelle", power: 1.20 },
+        { name: "Sursaut Incandescent", power: 1.10 }
     ],
     Plante: [
-        { name: "Charge", power: 1 },
-        { name: "Tranch'Herbe", power: 1.35 }
+        { name: "Charge", power: 1.00 },
+        { name: "Tranch'Herbe", power: 1.35 },
+        { name: "Fouet Liane", power: 1.10 },
+        { name: "Piqûre Toxique", power: 0.85 },
+        { name: "Feuille Tranchante", power: 1.15 },
+        { name: "Tempête de Pétales", power: 1.30 },
+        { name: "Épines Acérées", power: 0.90 },
+        { name: "Croissance Sauvage", power: 0.75 },
+        { name: "Frappe Racinaire", power: 1.20 },
+        { name: "Vent Végétal", power: 1.00 },
+        { name: "Rugissement des Bois", power: 1.10 },
+        { name: "Lianes Étrangleuses", power: 1.25 },
+        { name: "Spores Toxiques", power: 0.80 },
+        { name: "Fouet Ronce", power: 1.05 },
+        { name: "Pollen Explosif", power: 1.40 },
+        { name: "Assaut Botanique", power: 1.35 },
+        { name: "Griffe Végétale", power: 1.15 },
+        { name: "Tornade de Feuilles", power: 1.30 },
+        { name: "Éveil de la Forêt", power: 1.45 },
+        { name: "Piège Végétal", power: 0.95 },
+        { name: "Sève Corrosive", power: 1.00 },
+        { name: "Bourrasque Verte", power: 1.20 },
+        { name: "Danse des Pétales", power: 0.85 },
+        { name: "Colère de la Jungle", power: 1.50 },
+        { name: "Éclosion Fatale", power: 1.55 }
     ],
     Eau: [
-        { name: "Charge", power: 1 },
-        { name: "Pistolet à O", power: 1.35 }
+        { name: "Charge", power: 1.00 },
+        { name: "Pistolet à O", power: 1.35 },
+        { name: "Jet d'Écume", power: 0.90 },
+        { name: "Vague Déferlante", power: 1.30 },
+        { name: "Griffe Aquatique", power: 1.05 },
+        { name: "Bulles d'Attaque", power: 0.80 },
+        { name: "Trombe d'Eau", power: 1.20 },
+        { name: "Lame d'Eau", power: 1.15 },
+        { name: "Tourbillon Marin", power: 1.25 },
+        { name: "Éclaboussure Puissante", power: 0.85 },
+        { name: "Raz-de-Marée", power: 1.55 },
+        { name: "Jet Glacé", power: 1.10 },
+        { name: "Colère de l'Océan", power: 1.45 },
+        { name: "Cyclone Aquatique", power: 1.30 },
+        { name: "Souffle des Abysses", power: 1.20 },
+        { name: "Brouillard Marin", power: 0.75 },
+        { name: "Coup de Nageoire", power: 1.00 },
+        { name: "Onde Sous-Marine", power: 1.15 },
+        { name: "Torrent Déchaîné", power: 1.40 },
+        { name: "Vapeur Brûlante", power: 0.95 },
+        { name: "Fontaine de Cristal", power: 1.05 },
+        { name: "Frappe des Récifs", power: 1.10 },
+        { name: "Marée Furieuse", power: 1.35 },
+        { name: "Déluge", power: 1.50 },
+        { name: "Écume Tranchante", power: 1.25 }
     ],
     Normal: [
-        { name: "Charge", power: 1 },
-        { name: "Griffe", power: 1.15 }
+        { name: "Charge", power: 1.00 },
+        { name: "Griffe", power: 1.15 },
+        { name: "Coup de Boule", power: 0.90 },
+        { name: "Frappe Rapide", power: 0.80 },
+        { name: "Écrasement", power: 1.20 },
+        { name: "Riposte", power: 1.05 },
+        { name: "Hurlement", power: 0.75 },
+        { name: "Attaque Éclair", power: 1.10 },
+        { name: "Choc Frontal", power: 1.15 },
+        { name: "Griffe Rapide", power: 1.00 },
+        { name: "Ruade", power: 1.25 },
+        { name: "Percussion", power: 1.30 },
+        { name: "Coup de Grâce", power: 1.45 },
+        { name: "Bousculade", power: 0.85 },
+        { name: "Frappe Précise", power: 1.10 },
+        { name: "Tacle", power: 1.00 },
+        { name: "Furie", power: 1.35 },
+        { name: "Corne Perforante", power: 1.20 },
+        { name: "Choc Brutal", power: 1.15 },
+        { name: "Assaut Sauvage", power: 1.40 },
+        { name: "Feinte", power: 0.70 },
+        { name: "Contre-Attaque", power: 1.05 },
+        { name: "Frappe Décisive", power: 1.50 },
+        { name: "Élan Puissant", power: 1.25 },
+        { name: "Instinct Primitif", power: 1.55 }
     ]
 };
+
+// Nombre d'attaques qu'une créature connaît à la fois (comme dans les jeux
+// officiels, où chaque créature connaît un sous-ensemble de ses attaques
+// possibles plutôt que toutes en même temps).
+const MOVES_PER_CREATURE = 4;
 
 function getMovesForType(type) {
     const moves = MOVE_POOL[type] || MOVE_POOL.Normal;
     return moves.map(move => ({ ...move }));
+}
+
+// Tire au sort (sans répétition) MOVES_PER_CREATURE attaques parmi celles
+// du type de la créature, pour que deux créatures du même type puissent
+// jouer différemment.
+function pickMovesForCreature(type) {
+
+    const pool = getMovesForType(type);
+
+    for (let i = pool.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+
+    return pool.slice(0, MOVES_PER_CREATURE);
 }
 
 function pickRandomMove(creature) {
@@ -982,7 +1096,7 @@ function createCreature(id, name, type, level = 5) {
 
         fainted: false,
 
-        attacks: getMovesForType(type)
+        attacks: pickMovesForCreature(type)
     };
 }
 
@@ -1417,7 +1531,7 @@ function applySavedGame(saved) {
 
     [...currentPlayer.team, ...currentPlayer.storage].forEach(creature => {
         if (!creature.attacks || creature.attacks.length === 0) {
-            creature.attacks = getMovesForType(creature.type);
+            creature.attacks = pickMovesForCreature(creature.type);
         }
     });
 
