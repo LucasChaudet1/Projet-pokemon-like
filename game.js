@@ -497,10 +497,11 @@ function getEffectivenessMessage(multiplier) {
     return null;
 }
 
-// Petit badge affiché à côté du nom d'une attaque dans le menu de combat,
-// pour que le joueur voie le type de l'attaque avant même de l'utiliser.
-function renderMoveTypeBadge(moveType) {
-    return `<span class="move-type-badge move-type-${moveType.toLowerCase()}">${moveType}</span>`;
+// Petit badge de type réutilisé à la fois pour une attaque (menu de combat)
+// et pour une créature (en-tête du combat), pour que le joueur voie
+// toujours à quel type il a affaire.
+function renderTypeBadge(type) {
+    return `<span class="move-type-badge move-type-${type.toLowerCase()}">${type}</span>`;
 }
 
 // Indique, avant de choisir l'attaque, si elle sera avantagée/désavantagée
@@ -3250,6 +3251,7 @@ function startBattle(wild, trainerNpc = null) {
                     <img id="battlePlayerSprite" class="battle-sprite" src="" alt="">
                     <strong id="battlePlayerName"></strong>
                     <span id="battlePlayerLevel"></span>
+                    <span id="battlePlayerType"></span>
                     <div class="battle-hp-bar"><div id="battlePlayerHpFill" class="battle-hp-fill"></div></div>
                     <small id="battlePlayerHpText"></small>
                 </div>
@@ -3260,6 +3262,7 @@ function startBattle(wild, trainerNpc = null) {
                     <img id="battleWildSprite" class="battle-sprite" src="" alt="">
                     <strong id="battleWildName"></strong>
                     <span id="battleWildLevel"></span>
+                    <span id="battleWildType"></span>
                     <div class="battle-hp-bar"><div id="battleWildHpFill" class="battle-hp-fill"></div></div>
                     <small id="battleWildHpText"></small>
                 </div>
@@ -3340,7 +3343,7 @@ function openMoveMenu() {
             <button class="battle-move-button" data-move-index="${index}">
                 <span class="move-button-main">⚔️ ${move.name}</span>
                 <span class="move-button-meta">
-                    ${renderMoveTypeBadge(move.type)}
+                    ${renderTypeBadge(move.type)}
                     ${renderMoveEffectivenessBadge(move.type, opponentType)}
                 </span>
             </button>
@@ -3368,6 +3371,7 @@ function renderBattle(final = false) {
         `fakemon_creatures/${String(player.id).padStart(3, "0")}.png`;
     document.getElementById("battlePlayerName").textContent = player.name;
     document.getElementById("battlePlayerLevel").textContent = `Nv. ${player.level}`;
+    document.getElementById("battlePlayerType").innerHTML = renderTypeBadge(player.type);
 
     const playerHpPercent = Math.max(0, Math.min(100, (player.hp / player.maxHp) * 100));
     document.getElementById("battlePlayerHpFill").style.width = `${playerHpPercent}%`;
@@ -3377,6 +3381,7 @@ function renderBattle(final = false) {
         `fakemon_creatures/${String(wild.id).padStart(3, "0")}.png`;
     document.getElementById("battleWildName").textContent = wild.name;
     document.getElementById("battleWildLevel").textContent = `Nv. ${wild.level}`;
+    document.getElementById("battleWildType").innerHTML = renderTypeBadge(wild.type);
 
     const wildHpPercent = Math.max(0, Math.min(100, (wild.hp / wild.maxHp) * 100));
     document.getElementById("battleWildHpFill").style.width = `${wildHpPercent}%`;
@@ -4392,6 +4397,7 @@ function openPvpBattleScreen() {
                     <img id="pvpMineSprite" class="battle-sprite" src="" alt="">
                     <strong id="pvpMineName"></strong>
                     <span id="pvpMineLevel"></span>
+                    <span id="pvpMineType"></span>
                     <div class="battle-hp-bar"><div id="pvpMineHpFill" class="battle-hp-fill"></div></div>
                     <small id="pvpMineHpText"></small>
                 </div>
@@ -4402,6 +4408,7 @@ function openPvpBattleScreen() {
                     <img id="pvpOppSprite" class="battle-sprite" src="" alt="">
                     <strong id="pvpOppName"></strong>
                     <span id="pvpOppLevel"></span>
+                    <span id="pvpOppType"></span>
                     <div class="battle-hp-bar"><div id="pvpOppHpFill" class="battle-hp-fill"></div></div>
                     <small id="pvpOppHpText"></small>
                 </div>
@@ -4438,6 +4445,7 @@ function renderPvpBattle(row) {
         `fakemon_creatures/${String(mine.id).padStart(3, "0")}.png`;
     document.getElementById("pvpMineName").textContent = mine.name;
     document.getElementById("pvpMineLevel").textContent = `Nv. ${mine.level}`;
+    document.getElementById("pvpMineType").innerHTML = renderTypeBadge(mine.type);
 
     const mineHpPercent = Math.max(0, Math.min(100, (mine.hp / mine.maxHp) * 100));
     document.getElementById("pvpMineHpFill").style.width = `${mineHpPercent}%`;
@@ -4447,6 +4455,7 @@ function renderPvpBattle(row) {
         `fakemon_creatures/${String(opp.id).padStart(3, "0")}.png`;
     document.getElementById("pvpOppName").textContent = opp.name;
     document.getElementById("pvpOppLevel").textContent = `Nv. ${opp.level}`;
+    document.getElementById("pvpOppType").innerHTML = renderTypeBadge(opp.type);
 
     const oppHpPercent = Math.max(0, Math.min(100, (opp.hp / opp.maxHp) * 100));
     document.getElementById("pvpOppHpFill").style.width = `${oppHpPercent}%`;
@@ -4538,7 +4547,7 @@ function renderPvpActions(row, isP1, myPseudo, oppPseudo) {
             <button class="battle-move-button" data-move-index="${index}">
                 <span class="move-button-main">⚔️ ${move.name}</span>
                 <span class="move-button-meta">
-                    ${renderMoveTypeBadge(move.type)}
+                    ${renderTypeBadge(move.type)}
                     ${renderMoveEffectivenessBadge(move.type, opponentType)}
                 </span>
             </button>
