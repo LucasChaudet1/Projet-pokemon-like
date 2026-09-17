@@ -450,9 +450,57 @@ const MOVE_POOL = {
 // possibles plutôt que toutes en même temps).
 const MOVES_PER_CREATURE = 4;
 
+// ==========================================================
+// Avantages/désavantages de types
+//
+// Triangle classique Feu / Plante / Eau (chacun fort contre un, faible
+// contre un autre) ; Normal reste neutre partout, comme dans les jeux
+// officiels où il n'a ni faiblesse ni résistance particulière parmi les
+// types élémentaires de base.
+//
+// TYPE_CHART[typeDeLAttaque][typeDuDéfenseur] = multiplicateur de dégâts :
+//   2    = super efficace
+//   1    = efficacité normale
+//   0.5  = pas très efficace
+//   0    = n'affecte pas (immunité)
+//
+// getTypeMultiplier() accepte un type unique OU un tableau de types pour le
+// défenseur (les multiplicateurs se cumulent, comme la double-typologie des
+// jeux officiels), afin qu'une créature qui aurait plusieurs types un jour
+// soit déjà prise en charge sans modifier cette fonction.
+// ==========================================================
+
+const TYPE_CHART = {
+    Feu: { Feu: 1, Plante: 2, Eau: 0.5, Normal: 1 },
+    Plante: { Feu: 0.5, Plante: 1, Eau: 2, Normal: 1 },
+    Eau: { Feu: 2, Plante: 0.5, Eau: 1, Normal: 1 },
+    Normal: { Feu: 1, Plante: 1, Eau: 1, Normal: 1 }
+};
+
+function getTypeMultiplier(moveType, defenderTypes) {
+
+    const types = Array.isArray(defenderTypes) ? defenderTypes : [defenderTypes];
+    const chart = TYPE_CHART[moveType];
+
+    if (!chart) return 1;
+
+    return types.reduce((multiplier, type) => {
+        const factor = chart[type];
+        return multiplier * (typeof factor === "number" ? factor : 1);
+    }, 1);
+}
+
+function getEffectivenessMessage(multiplier) {
+    if (multiplier === 0) return "Ça n'affecte pas l'adversaire...";
+    if (multiplier > 1) return "C'est super efficace !";
+    if (multiplier < 1) return "Ce n'est pas très efficace...";
+    return null;
+}
+
 function getMovesForType(type) {
     const moves = MOVE_POOL[type] || MOVE_POOL.Normal;
-    return moves.map(move => ({ ...move }));
+    const moveType = MOVE_POOL[type] ? type : "Normal";
+    return moves.map(move => ({ ...move, type: moveType }));
 }
 
 // Tire au sort (sans répétition) MOVES_PER_CREATURE attaques parmi celles
@@ -3062,11 +3110,22 @@ function computeCaptureChance(wild) {
     return Math.min(0.95, Math.max(0.05, chance));
 }
 
+// Renvoie { damage, multiplier } : le multiplicateur est calculé séparément
+// pour permettre d'afficher un message ("super efficace", etc.) là où le
+// dégât est appliqué, sans dupliquer le calcul de TYPE_CHART.
 function computeDamage(attacker, defender, move) {
+
     const power = move ? move.power : 1;
     const variance = 0.85 + Math.random() * 0.3;
-    const raw = (attacker.attack * power - defender.defense * 0.5) * variance;
-    return Math.max(1, Math.round(raw));
+    const multiplier = move && move.type ? getTypeMultiplier(move.type, defender.type) : 1;
+
+    if (multiplier === 0) {
+        return { damage: 0, multiplier };
+    }
+
+    const raw = (attacker.attack * power - defender.defense * 0.5) * variance * multiplier;
+
+    return { damage: Math.max(1, Math.round(raw)), multiplier };
 }
 
 function addBattleLog(text) {
@@ -3074,12 +3133,19 @@ function addBattleLog(text) {
 }
 
 function applyAttack(attacker, defender, move) {
-    const damage = computeDamage(attacker, defender, move);
+
+    const { damage, multiplier } = computeDamage(attacker, defender, move);
     defender.hp = Math.max(0, defender.hp - damage);
 
     const moveName = move ? move.name : "une attaque";
 
     addBattleLog(`${attacker.name} utilise ${moveName} et inflige ${damage} dégâts à ${defender.name} !`);
+
+    const effectivenessMessage = getEffectivenessMessage(multiplier);
+
+    if (effectivenessMessage) {
+        addBattleLog(effectivenessMessage);
+    }
 }
 
 function buildTrainerTeam(npc) {
@@ -4550,20 +4616,24 @@ function computeNextPvpState(row) {
 
                 if (a1.hp <= 0) return;
 
-                const dmg = computeDamage(a1, a2, move1);
-                a2.hp = Math.max(0, a2.hp - dmg);
+                const { damage, multiplier } = computeDamage(a1, a2, move1);
+                a2.hp = Math.max(0, a2.hp - damage);
 
-                log.push(`${a1.name} utilise ${move1.name} et inflige ${dmg} dégâts à ${a2.name} !`);
+                log.push(`${a1.name} utilise ${move1.name} et inflige ${damage} dégâts à ${a2.name} !`);
+                const message1 = getEffectivenessMessage(multiplier);
+                if (message1) log.push(message1);
                 if (a2.hp <= 0) log.push(`${a2.name} est K.O. !`);
 
             } else {
 
                 if (a2.hp <= 0) return;
 
-                const dmg = computeDamage(a2, a1, move2);
-                a1.hp = Math.max(0, a1.hp - dmg);
+                const { damage, multiplier } = computeDamage(a2, a1, move2);
+                a1.hp = Math.max(0, a1.hp - damage);
 
-                log.push(`${a2.name} utilise ${move2.name} et inflige ${dmg} dégâts à ${a1.name} !`);
+                log.push(`${a2.name} utilise ${move2.name} et inflige ${damage} dégâts à ${a1.name} !`);
+                const message2 = getEffectivenessMessage(multiplier);
+                if (message2) log.push(message2);
                 if (a1.hp <= 0) log.push(`${a1.name} est K.O. !`);
             }
         });
