@@ -1976,20 +1976,6 @@ const TILES = {
         encounterZone: true
     },
 
-    BUSH: {
-        color: "#3f8f3a",
-        walkable: true,
-        deco: "bush",
-        decoColor: "#1f5c1f"
-    },
-
-    DRY_BUSH: {
-        color: "#e8d38a",
-        walkable: true,
-        deco: "bush",
-        decoColor: "#8a6d3a"
-    },
-
     // Buisson dense : cache des créatures sauvages (comme les hautes herbes)
     REED_THICKET: {
         color: "#e8d38a",
@@ -2012,13 +1998,6 @@ const TILES = {
         color: "#332d26",
         walkable: false,
         deco: "obsidian"
-    },
-
-    ASH_BUSH: {
-        color: "#5c5248",
-        walkable: true,
-        deco: "bush",
-        decoColor: "#2e2a24"
     },
 
     ASH_THICKET: {
@@ -2050,13 +2029,6 @@ const TILES = {
         color: "#eef6fb",
         walkable: false,
         deco: "pine"
-    },
-
-    SNOW_BUSH: {
-        color: "#eef6fb",
-        walkable: true,
-        deco: "bush",
-        decoColor: "#c8dced"
     },
 
     SNOW_THICKET: {
@@ -2295,63 +2267,6 @@ function placeEncounterThickets(grid) {
     }
 }
 
-function placeBushes(grid) {
-
-    // Bourg Palette : buissons dans l'herbe autour du village
-    for (let y = 0; y < 11; y++) {
-        for (let x = 0; x < 14; x++) {
-            if (grid[y][x] === "GRASS" && (x * 5 + y * 7) % 23 === 0) {
-                grid[y][x] = "BUSH";
-            }
-        }
-    }
-
-    // Forêt Sombre : buissons entre les arbres
-    for (let y = 0; y < 11; y++) {
-        for (let x = 16; x < 29; x++) {
-            if (grid[y][x] === "GRASS_DARK" && (x * 9 + y * 2) % 13 === 0) {
-                grid[y][x] = "BUSH";
-            }
-        }
-    }
-
-    // Lac Azur : buissons secs sur le sable
-    for (let y = 13; y < MAP_ROWS; y++) {
-        for (let x = 0; x < 14; x++) {
-            if (grid[y][x] === "SAND" && (x * 3 + y * 11) % 17 === 0) {
-                grid[y][x] = "DRY_BUSH";
-            }
-        }
-    }
-
-    // Route Sablonneuse : buissons secs entre les rochers
-    for (let y = 13; y < MAP_ROWS; y++) {
-        for (let x = 16; x < 29; x++) {
-            if (grid[y][x] === "DESERT" && (x * 3 + y * 17) % 13 === 0) {
-                grid[y][x] = "DRY_BUSH";
-            }
-        }
-    }
-
-    // Zone Volcanique : buissons calcinés
-    for (let y = 0; y < 11; y++) {
-        for (let x = 31; x < MAP_COLS; x++) {
-            if (grid[y][x] === "ASH" && (x * 7 + y * 5) % 19 === 0) {
-                grid[y][x] = "ASH_BUSH";
-            }
-        }
-    }
-
-    // Zone Arctique : buissons givrés
-    for (let y = 13; y < MAP_ROWS; y++) {
-        for (let x = 31; x < MAP_COLS; x++) {
-            if (grid[y][x] === "SNOW" && (x * 7 + y * 5) % 19 === 0) {
-                grid[y][x] = "SNOW_BUSH";
-            }
-        }
-    }
-}
-
 // Emplacement du passage vers le Plateau des Légendes : au tout nord de
 // Bourg Palette, dans le coin libre près du chemin vers la Forêt Sombre.
 const SUMMIT_GATE_X = 13;
@@ -2391,7 +2306,6 @@ function buildMap() {
     placeVolcanicZone(grid);
     placeArcticZone(grid);
     placeEncounterThickets(grid);
-    placeBushes(grid);
     placeGyms(grid);
     placeSummitGate(grid);
 
@@ -8203,18 +8117,6 @@ function drawTile(x, y, screenX, screenY, grid) {
             );
 
             ctx.stroke();
-        });
-    } else if (tile.deco === "bush") {
-        ctx.fillStyle = tile.decoColor || "#1f5c1f";
-        const bumps = [
-            [TILE_SIZE / 2 - 8, TILE_SIZE / 2 + 2, 8],
-            [TILE_SIZE / 2 + 7, TILE_SIZE / 2 + 3, 8],
-            [TILE_SIZE / 2, TILE_SIZE / 2 - 5, 9]
-        ];
-        bumps.forEach(([bx, by, r]) => {
-            ctx.beginPath();
-            ctx.arc(screenX + bx, screenY + by, r, 0, Math.PI * 2);
-            ctx.fill();
         });
     } else if (tile.deco === "thicket") {
         ctx.fillStyle = tile.decoColor || "#1f5c1f";
