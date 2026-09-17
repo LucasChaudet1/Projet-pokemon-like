@@ -3580,6 +3580,19 @@ function openMoveMenu() {
         .addEventListener("click", renderBattleActions);
 }
 
+function getPokedexStatusDot(creatureId) {
+
+    if (currentPlayer.pokedex.caught.includes(creatureId)) {
+        return `<span class="pokedex-status-dot caught" title="Déjà capturée"></span>`;
+    }
+
+    if (currentPlayer.pokedex.seen.includes(creatureId)) {
+        return `<span class="pokedex-status-dot seen" title="Déjà vue"></span>`;
+    }
+
+    return "";
+}
+
 function renderBattle(final = false) {
 
     const player = battlePlayerCreature;
@@ -3587,7 +3600,8 @@ function renderBattle(final = false) {
 
     document.getElementById("battlePlayerSprite").src =
         `fakemon_creatures/${String(player.id).padStart(3, "0")}.png`;
-    document.getElementById("battlePlayerName").textContent = player.name;
+    document.getElementById("battlePlayerName").innerHTML =
+    `${player.name} ${getPokedexStatusDot(player.id)}`;
     document.getElementById("battlePlayerLevel").textContent = `Nv. ${player.level}`;
     document.getElementById("battlePlayerType").innerHTML = renderTypeBadge(player.type);
 
@@ -3601,7 +3615,8 @@ function renderBattle(final = false) {
 
     document.getElementById("battleWildSprite").src =
         `fakemon_creatures/${String(wild.id).padStart(3, "0")}.png`;
-    document.getElementById("battleWildName").textContent = wild.name;
+    document.getElementById("battleWildName").innerHTML =
+    `${wild.name} ${getPokedexStatusDot(wild.id)}`;
     document.getElementById("battleWildLevel").textContent = `Nv. ${wild.level}`;
     document.getElementById("battleWildType").innerHTML = renderTypeBadge(wild.type);
 
