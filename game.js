@@ -2775,9 +2775,15 @@ function buildGymLeaderNpc(gym) {
     return {
         id: gym.id,
         name: gym.leaderName,
+
+        // Position du PNJ dans l'arène
+        tileX: GYM_LEADER_X,
+        tileY: GYM_LEADER_Y,
+
         color: gym.color,
         type: "battle",
         icon: gym.icon,
+
         lines: gym.lines,
         defeatedLine: gym.defeatedLine,
         requiresGymId: gym.requiresGymId,
@@ -7141,8 +7147,8 @@ function drawNPC(screenX, screenY, npc) {
     const bob =
         Math.sin(
             visualTime * 2 +
-            npc.tileX +
-            npc.tileY
+            (npc.tileX || 0) +
+            (npc.tileY || 0)
         ) * 0.8;
 
     const x = screenX;
