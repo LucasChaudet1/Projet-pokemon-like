@@ -1,11 +1,11 @@
-// Configuration Supabase — nécessaire pour le combat en ligne (PvP) et pour
-// le compte joueur (pseudo + mot de passe)
+// Configuration Supabase — nécessaire pour le combat en ligne (PvP),
+// l'échange entre joueurs et le compte joueur (pseudo + mot de passe)
 //
-// Le reste du jeu fonctionne sans backend (localStorage). Le PvP a besoin
-// d'un point de rendez-vous partagé entre les deux joueurs, et le compte
-// joueur a besoin d'un endroit pour vérifier les mots de passe : c'est le
-// rôle de Supabase ici (base Postgres + authentification + temps réel,
-// gratuit).
+// Le reste du jeu fonctionne sans backend (localStorage). Le PvP et
+// l'échange ont besoin d'un point de rendez-vous partagé entre les deux
+// joueurs, et le compte joueur a besoin d'un endroit pour vérifier les
+// mots de passe : c'est le rôle de Supabase ici (base Postgres +
+// authentification + temps réel, gratuit).
 //
 // Marche à suivre (5 minutes) :
 //
@@ -19,7 +19,8 @@
 //    dans SUPABASE_ANON_KEY ci-dessous.
 // 5. Ouvre l'onglet "SQL Editor" du projet Supabase, colle le contenu du
 //    fichier supabase_pvp_schema.sql (à la racine de ce dépôt) et clique
-//    sur "Run". Ça crée la table pvp_matches et active le temps réel dessus.
+//    sur "Run". Ça crée les tables pvp_matches, pvp_queue et trades, et
+//    active le temps réel dessus (le script peut être relancé sans risque).
 // 6. Pour le compte joueur : va dans Authentication > Providers > Email et
 //    DÉSACTIVE "Confirm email". Le jeu n'utilise pas de vraie adresse e-mail
 //    (juste un pseudo + mot de passe), donc aucun e-mail de confirmation ne

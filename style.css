@@ -213,6 +213,15 @@ body {
     left: 260px;
 }
 
+/* Bouton d'échange entre joueurs (US18) — sur une 2e ligne pour ne jamais
+   chevaucher les boutons PvP/déconnexion, quelle que soit la largeur des
+   textes affichés au-dessus */
+
+.trade-button {
+    top: 116px;
+    left: 20px;
+}
+
 /* Cacher un élément */
 
 .hidden {
@@ -1390,4 +1399,84 @@ body {
     font-size: 18px;
     font-weight: bold;
     text-align: center;
+}
+
+
+/* =========================
+   ÉCHANGE ENTRE JOUEURS (US18)
+   ========================= */
+
+#tradeWindow {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+
+    display: flex;
+    justify-content: center;
+    align-items: center;
+
+    background: rgba(0, 0, 0, 0.65);
+
+    z-index: 9999;
+}
+
+.trade-columns {
+    display: flex;
+    gap: 14px;
+}
+
+.trade-side {
+    flex: 1;
+    min-width: 0;
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+
+    padding: 10px;
+
+    background: white;
+    border: 2px solid #d1d5db;
+    border-radius: 10px;
+}
+
+.trade-side h3 {
+    margin: 0;
+    font-size: 14px;
+    text-align: center;
+    color: #374151;
+}
+
+.trade-creature-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+
+    color: #1f2937;
+}
+
+.trade-creature-card img {
+    width: 64px;
+    height: 64px;
+    object-fit: contain;
+}
+
+.trade-pick-list {
+    width: 100%;
+    max-height: 220px;
+
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+
+    overflow-y: auto;
+}
+
+.trade-pick-button {
+    padding: 8px !important;
+    font-size: 13px !important;
 }

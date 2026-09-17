@@ -261,11 +261,13 @@
 **je veux** échanger une créature avec un autre joueur,  
 **afin de** compléter mon répertoire de créatures.
 
+**Statut :** 🚧 Implémenté — nécessite le même projet Supabase que le PvP (voir `supabase-config.js` et `supabase_pvp_schema.sql` à la racine du dépôt), le jeu n'ayant pas d'autre backend.
+
 #### Critères d'acceptation
-- [ ] Le joueur peut proposer une créature à l'échange.
-- [ ] L'autre joueur peut accepter ou refuser.
-- [ ] Les créatures sont transférées après acceptation.
-- [ ] L'échange est sécurisé et définitif après confirmation.
+- [x] Le joueur peut proposer une créature à l'échange (parmi son équipe et son stockage), via un code d'échange à 6 caractères partagé entre les deux clients.
+- [x] L'autre joueur peut accepter (en proposant à son tour une créature puis en confirmant) ou refuser (en annulant l'échange à tout moment avant la confirmation finale).
+- [x] Les créatures sont transférées après acceptation (chaque joueur reçoit la créature de l'autre dans son équipe, ou son stockage si l'équipe est pleine, et elle est marquée comme capturée dans le Pokédex).
+- [x] L'échange est sécurisé et définitif après confirmation (le transfert n'a lieu qu'une fois que les deux joueurs ont confirmé ; avant cela, chacun peut encore changer sa proposition ou annuler).
 
 **Priorité :** Basse
 

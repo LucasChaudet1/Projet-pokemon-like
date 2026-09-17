@@ -128,3 +128,59 @@ begin
         alter publication supabase_realtime add table pvp_queue;
     end if;
 end $$;
+
+
+-- ==========================================================
+-- Échange entre joueurs (US18 — bouton "🔁 Échange"). Même principe que
+-- pvp_matches (une ligne par échange, partagée par code entre les deux
+-- joueurs), mais sans logique de combat : chaque joueur y dépose la
+-- créature qu'il propose, puis confirme. Une fois les deux confirmations
+-- reçues, chaque client applique le changement dans sa propre équipe.
+-- ==========================================================
+
+create table if not exists trades (
+    code text primary key,
+    status text not null default 'waiting', -- waiting | active | finished | cancelled
+
+    player1_pseudo text,
+    player2_pseudo text,
+
+    player1_creature jsonb,
+    player2_creature jsonb,
+
+    player1_confirmed boolean not null default false,
+    player2_confirmed boolean not null default false,
+
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now()
+);
+
+alter table trades enable row level security;
+
+drop policy if exists "Lecture publique des echanges" on trades;
+create policy "Lecture publique des echanges" on trades
+    for select using (true);
+
+drop policy if exists "Creation publique d'echanges" on trades;
+create policy "Creation publique d'echanges" on trades
+    for insert with check (true);
+
+drop policy if exists "Mise a jour publique des echanges" on trades;
+create policy "Mise a jour publique des echanges" on trades
+    for update using (true);
+
+drop policy if exists "Suppression publique des echanges" on trades;
+create policy "Suppression publique des echanges" on trades
+    for delete using (true);
+
+do $$
+begin
+    if not exists (
+        select 1 from pg_publication_tables
+        where pubname = 'supabase_realtime'
+          and schemaname = 'public'
+          and tablename = 'trades'
+    ) then
+        alter publication supabase_realtime add table trades;
+    end if;
+end $$;

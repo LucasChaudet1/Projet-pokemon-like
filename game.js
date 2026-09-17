@@ -15,6 +15,7 @@ const teamDisplay = document.getElementById("teamDisplay");
 const creatureSelection = document.getElementById("creatureSelection");
 const pokedexButton = document.getElementById("pokedexButton");
 const pvpButton = document.getElementById("pvpButton");
+const tradeButton = document.getElementById("tradeButton");
 const logoutButton = document.getElementById("logoutButton");
 const moneyDisplay = document.getElementById("moneyDisplay");
 
@@ -674,6 +675,7 @@ const MAX_TEAM_SIZE = 6;
 startButton.addEventListener("click", startGame);
 pokedexButton.addEventListener("click", openPokedex);
 pvpButton.addEventListener("click", openPvpMenu);
+tradeButton.addEventListener("click", openTradeMenu);
 
 // ==========================================================
 // Client Supabase (backend partagé nécessaire pour le PvP — US19 —
@@ -2031,6 +2033,11 @@ let pvpMatch = null;
 // dans la file d'attente pvp_queue, null sinon.
 let pvpSearch = null;
 
+// Échange entre joueurs (US18) : mêmes principes que le PvP (fenêtre de
+// menu + session active), mais table et logique séparées.
+let tradeOpen = false;
+let tradeSession = null;
+
 const CENTER_COLS = 20;
 const CENTER_ROWS = 15;
 
@@ -2265,6 +2272,17 @@ document.addEventListener("keydown", (e) => {
 
         if (key === "Escape" && !pvpMatch && !pvpSearch) {
             closePvpMenu();
+        }
+
+        return;
+    }
+
+    // Menu ou échange en ligne ouvert (même logique que le PvP : Échap ne
+    // ferme que l'écran de création/connexion, jamais un échange en cours)
+    if (tradeOpen) {
+
+        if (key === "Escape" && !tradeSession) {
+            closeTradeMenu();
         }
 
         return;
@@ -4506,6 +4524,602 @@ function closePvpBattle() {
     const pvpWindow = document.getElementById("pvpWindow");
 
     if (pvpWindow) pvpWindow.remove();
+}
+
+// ==========================================================
+// Échange entre joueurs (US18)
+//
+// Même principe que le combat PvP par code (table Supabase partagée +
+// abonnement temps réel), mais sans combat : chaque joueur propose une
+// créature de son équipe ou de son stockage, voit l'offre de l'autre, puis
+// confirme. Dès que les deux ont confirmé, chaque client applique
+// localement le résultat (retire sa créature donnée, ajoute celle reçue) —
+// aucun calcul à synchroniser entre les deux joueurs, donc pas besoin d'un
+// "résolveur" unique comme pour les tours de combat : chacun ne modifie que
+// sa propre équipe.
+// ==========================================================
+
+// Retrouve une créature du joueur (équipe ou stockage) par son identifiant
+// unique. Renvoie { list, index } (list étant directement currentPlayer.team
+// ou currentPlayer.storage, pour pouvoir la modifier en place).
+function findCreatureLocation(uid) {
+
+    let index = currentPlayer.team.findIndex(creature => creature.uid === uid);
+
+    if (index !== -1) return { list: currentPlayer.team, index };
+
+    index = currentPlayer.storage.findIndex(creature => creature.uid === uid);
+
+    if (index !== -1) return { list: currentPlayer.storage, index };
+
+    return null;
+}
+
+function openTradeMenu() {
+
+    if (tradeOpen) return;
+
+    if (currentPlayer.team.length === 0 && currentPlayer.storage.length === 0) {
+        alert("Tu n'as aucune créature à échanger.");
+        return;
+    }
+
+    tradeOpen = true;
+    pressedKeys.clear();
+
+    const tradeWindow = document.createElement("div");
+    tradeWindow.id = "tradeWindow";
+    document.body.appendChild(tradeWindow);
+
+    renderTradeMenuScreen();
+}
+
+function renderTradeMenuScreen() {
+
+    const tradeWindow = document.getElementById("tradeWindow");
+
+    if (!tradeWindow) return;
+
+    if (!isSupabaseConfigured()) {
+        tradeWindow.innerHTML = `
+            <div class="battle-box pvp-box">
+                <h2 class="battle-title">🔁 Échange entre joueurs</h2>
+                <p>L'échange en ligne a besoin d'un backend partagé (Supabase) pour synchroniser les deux joueurs.</p>
+                <p>Configure <code>SUPABASE_URL</code> et <code>SUPABASE_ANON_KEY</code> dans <code>supabase-config.js</code>, exécute <code>supabase_pvp_schema.sql</code> dans ton projet Supabase, puis recharge la page.</p>
+                <button id="tradeCloseButton">Fermer</button>
+            </div>
+        `;
+
+        document.getElementById("tradeCloseButton").addEventListener("click", closeTradeMenu);
+        return;
+    }
+
+    tradeWindow.innerHTML = `
+        <div class="battle-box pvp-box">
+
+            <h2 class="battle-title">🔁 Échange entre joueurs</h2>
+
+            <p class="pvp-intro">Échange une créature avec un autre joueur pour compléter ton répertoire !</p>
+
+            <button id="tradeCreateButton">🆕 Créer un échange</button>
+
+            <div class="pvp-divider">— ou —</div>
+
+            <div class="pvp-join-row">
+                <input id="tradeCodeInput" maxlength="6" placeholder="CODE D'ÉCHANGE">
+                <button id="tradeJoinButton">Rejoindre</button>
+            </div>
+
+            <p id="tradeMenuError" class="pvp-error"></p>
+
+            <button id="tradeCloseButton" class="pvp-secondary">Fermer</button>
+
+        </div>
+    `;
+
+    document
+        .getElementById("tradeCreateButton")
+        .addEventListener("click", createTradeRoom);
+
+    document
+        .getElementById("tradeJoinButton")
+        .addEventListener("click", () => {
+            joinTradeRoom(document.getElementById("tradeCodeInput").value);
+        });
+
+    document
+        .getElementById("tradeCodeInput")
+        .addEventListener("keydown", (e) => {
+            e.stopPropagation();
+
+            if (e.key === "Enter") {
+                joinTradeRoom(document.getElementById("tradeCodeInput").value);
+            }
+        });
+
+    document
+        .getElementById("tradeCloseButton")
+        .addEventListener("click", closeTradeMenu);
+}
+
+function showTradeMenuError(message) {
+    const errorEl = document.getElementById("tradeMenuError");
+
+    if (errorEl) errorEl.textContent = message;
+}
+
+// Ferme le menu d'échange, mais jamais un échange déjà créé/rejoint (évite
+// de le perdre par une fermeture accidentelle au clavier ou au clic).
+function closeTradeMenu() {
+
+    if (tradeSession) return;
+
+    tradeOpen = false;
+
+    const tradeWindow = document.getElementById("tradeWindow");
+
+    if (tradeWindow) tradeWindow.remove();
+}
+
+async function createTradeRoom() {
+
+    const client = getSupabaseClient();
+
+    if (!client) return;
+
+    const createButton = document.getElementById("tradeCreateButton");
+
+    if (createButton) createButton.disabled = true;
+
+    showTradeMenuError("");
+
+    for (let attempt = 0; attempt < 5; attempt++) {
+
+        const code = generatePvpRoomCode();
+
+        const { data, error } = await client
+            .from("trades")
+            .insert({
+                code,
+                status: "waiting",
+                player1_pseudo: currentPlayer.pseudo
+            })
+            .select()
+            .single();
+
+        if (!error && data) {
+            tradeSession = { code, role: "player1", channel: null, row: data, applied: false };
+            subscribeToTrade(code);
+            renderTradeWaitingScreen();
+            return;
+        }
+
+        // Code déjà pris (contrainte unique sur "code") : on retente avec un autre code
+        if (error && error.code !== "23505") {
+            console.error(error);
+            showTradeMenuError("Impossible de créer l'échange. Vérifie ta configuration Supabase.");
+            if (createButton) createButton.disabled = false;
+            return;
+        }
+    }
+
+    showTradeMenuError("Impossible de générer un code, réessaie.");
+
+    if (createButton) createButton.disabled = false;
+}
+
+async function joinTradeRoom(rawCode) {
+
+    const client = getSupabaseClient();
+
+    if (!client) return;
+
+    const code = rawCode.trim().toUpperCase();
+
+    if (code.length === 0) {
+        showTradeMenuError("Entre un code d'échange.");
+        return;
+    }
+
+    const joinButton = document.getElementById("tradeJoinButton");
+
+    if (joinButton) joinButton.disabled = true;
+
+    showTradeMenuError("");
+
+    const { data: existing, error: fetchError } = await client
+        .from("trades")
+        .select("*")
+        .eq("code", code)
+        .maybeSingle();
+
+    if (fetchError || !existing) {
+        showTradeMenuError("Échange introuvable. Vérifie le code.");
+        if (joinButton) joinButton.disabled = false;
+        return;
+    }
+
+    if (existing.status !== "waiting") {
+        showTradeMenuError("Cet échange a déjà commencé ou est terminé.");
+        if (joinButton) joinButton.disabled = false;
+        return;
+    }
+
+    const { data: updated, error: updateError } = await client
+        .from("trades")
+        .update({
+            player2_pseudo: currentPlayer.pseudo,
+            status: "active",
+            updated_at: new Date().toISOString()
+        })
+        .eq("code", code)
+        .eq("status", "waiting")
+        .select()
+        .single();
+
+    if (updateError || !updated) {
+        showTradeMenuError("Cet échange vient d'être rejoint par quelqu'un d'autre.");
+        if (joinButton) joinButton.disabled = false;
+        return;
+    }
+
+    tradeSession = { code, role: "player2", channel: null, row: updated, applied: false };
+    subscribeToTrade(code);
+    openTradeScreen();
+    renderTradeScreen(updated);
+}
+
+function subscribeToTrade(code) {
+
+    const client = getSupabaseClient();
+
+    if (!client || !tradeSession) return;
+
+    const channel = client
+        .channel(`trade-${code}`)
+        .on(
+            "postgres_changes",
+            { event: "*", schema: "public", table: "trades", filter: `code=eq.${code}` },
+            (payload) => {
+
+                if (!tradeSession) return;
+
+                if (payload.eventType === "DELETE") {
+                    alert("L'échange a été annulé.");
+                    closeTradeWindow();
+                    return;
+                }
+
+                handleTradeRowUpdate(payload.new);
+            }
+        )
+        .subscribe();
+
+    tradeSession.channel = channel;
+}
+
+function renderTradeWaitingScreen() {
+
+    const tradeWindow = document.getElementById("tradeWindow");
+
+    if (!tradeWindow || !tradeSession) return;
+
+    tradeWindow.innerHTML = `
+        <div class="battle-box pvp-box">
+
+            <h2 class="battle-title">⏳ En attente d'un partenaire d'échange...</h2>
+
+            <p>Partage ce code avec ton adversaire :</p>
+
+            <div class="pvp-code-display">${tradeSession.code}</div>
+
+            <p class="pvp-hint">L'échange démarrera automatiquement dès qu'il/elle aura rejoint.</p>
+
+            <button id="tradeCancelWaitButton" class="pvp-secondary">Annuler</button>
+
+        </div>
+    `;
+
+    document
+        .getElementById("tradeCancelWaitButton")
+        .addEventListener("click", cancelTrade);
+}
+
+function openTradeScreen() {
+
+    const tradeWindow = document.getElementById("tradeWindow");
+
+    if (!tradeWindow) return;
+
+    tradeWindow.innerHTML = `
+        <div class="battle-box pvp-box" id="tradeBox">
+
+            <h2 class="battle-title" id="tradeTitle">🔁 Échange</h2>
+
+            <div class="trade-columns">
+
+                <div class="trade-side">
+                    <h3>Ta créature</h3>
+                    <div id="tradeMineArea"></div>
+                </div>
+
+                <div class="trade-side">
+                    <h3 id="tradeOppLabel">Créature de l'adversaire</h3>
+                    <div id="tradeOppArea"></div>
+                </div>
+
+            </div>
+
+            <div class="battle-actions" id="tradeActions"></div>
+
+        </div>
+    `;
+}
+
+function renderTradeCreatureCard(creature) {
+
+    if (!creature) return "";
+
+    return `
+        <div class="trade-creature-card">
+            <img src="fakemon_creatures/${String(creature.id).padStart(3, "0")}.png" alt="${creature.name}">
+            <strong>${creature.name}</strong>
+            <span>Nv. ${creature.level}</span>
+        </div>
+    `;
+}
+
+function buildTradePickList() {
+
+    const options = [
+        ...currentPlayer.team.map(creature => ({ creature, from: "Équipe" })),
+        ...currentPlayer.storage.map(creature => ({ creature, from: "Stockage" }))
+    ];
+
+    if (options.length === 0) {
+        return `<p class="pvp-hint">Tu n'as aucune créature à échanger.</p>`;
+    }
+
+    return `
+        <div class="trade-pick-list">
+            ${options.map(({ creature, from }) => `
+                <button class="trade-pick-button" data-uid="${creature.uid}">
+                    ${creature.name} (Nv. ${creature.level}) — ${from}
+                </button>
+            `).join("")}
+        </div>
+    `;
+}
+
+function renderTradeScreen(row) {
+
+    if (!tradeSession) return;
+
+    const isP1 = tradeSession.role === "player1";
+
+    const myPseudo = isP1 ? row.player1_pseudo : row.player2_pseudo;
+    const oppPseudo = isP1 ? row.player2_pseudo : row.player1_pseudo;
+    const myCreature = isP1 ? row.player1_creature : row.player2_creature;
+    const oppCreature = isP1 ? row.player2_creature : row.player1_creature;
+    const myConfirmed = isP1 ? row.player1_confirmed : row.player2_confirmed;
+    const oppConfirmed = isP1 ? row.player2_confirmed : row.player1_confirmed;
+
+    document.getElementById("tradeTitle").textContent = `🔁 Échange avec ${oppPseudo}`;
+    document.getElementById("tradeOppLabel").textContent = `Créature de ${oppPseudo}`;
+
+    const mineArea = document.getElementById("tradeMineArea");
+
+    if (row.status === "finished") {
+        mineArea.innerHTML = renderTradeCreatureCard(myCreature) + `<p class="pvp-hint">Donnée</p>`;
+    } else if (myConfirmed) {
+        mineArea.innerHTML = renderTradeCreatureCard(myCreature) + `<p class="pvp-hint">Confirmé, en attente de ${oppPseudo}...</p>`;
+    } else if (myCreature) {
+        mineArea.innerHTML = renderTradeCreatureCard(myCreature) + `<button id="tradeChangeButton" class="pvp-secondary">Changer</button>`;
+    } else {
+        mineArea.innerHTML = buildTradePickList();
+    }
+
+    const oppArea = document.getElementById("tradeOppArea");
+
+    if (row.status === "finished") {
+        oppArea.innerHTML = renderTradeCreatureCard(oppCreature) + `<p class="pvp-hint">Reçue 🎉</p>`;
+    } else if (oppCreature) {
+        oppArea.innerHTML = renderTradeCreatureCard(oppCreature) +
+            (oppConfirmed
+                ? `<p class="pvp-hint">✅ Confirmé</p>`
+                : `<p class="pvp-hint">En attente de confirmation...</p>`);
+    } else {
+        oppArea.innerHTML = `<p class="pvp-waiting">En attente de sa sélection...</p>`;
+    }
+
+    const changeButton = document.getElementById("tradeChangeButton");
+    if (changeButton) {
+        changeButton.addEventListener("click", () => setTradeOffer(null));
+    }
+
+    document.querySelectorAll(".trade-pick-button").forEach(button => {
+        const uid = Number(button.dataset.uid);
+        button.addEventListener("click", () => setTradeOffer(uid));
+    });
+
+    const actionsEl = document.getElementById("tradeActions");
+
+    if (row.status === "finished") {
+        actionsEl.innerHTML = `<button id="tradeCloseFinishedButton">Fermer</button>`;
+
+        document
+            .getElementById("tradeCloseFinishedButton")
+            .addEventListener("click", closeTradeWindow);
+
+        return;
+    }
+
+    const canConfirm = myCreature && oppCreature && !myConfirmed;
+
+    actionsEl.innerHTML =
+        (canConfirm ? `<button id="tradeConfirmButton">✅ Confirmer l'échange</button>` : "") +
+        `<button id="tradeCancelButton" class="pvp-secondary">Annuler l'échange</button>`;
+
+    if (canConfirm) {
+        document
+            .getElementById("tradeConfirmButton")
+            .addEventListener("click", confirmTrade);
+    }
+
+    document
+        .getElementById("tradeCancelButton")
+        .addEventListener("click", cancelTrade);
+}
+
+async function setTradeOffer(uid) {
+
+    if (!tradeSession) return;
+
+    const client = getSupabaseClient();
+
+    if (!client) return;
+
+    let snapshot = null;
+
+    if (uid !== null) {
+        const location = findCreatureLocation(uid);
+        if (!location) return;
+        snapshot = { ...location.list[location.index] };
+    }
+
+    const field = tradeSession.role === "player1" ? "player1_creature" : "player2_creature";
+
+    await client
+        .from("trades")
+        .update({ [field]: snapshot, updated_at: new Date().toISOString() })
+        .eq("code", tradeSession.code);
+}
+
+async function confirmTrade() {
+
+    if (!tradeSession) return;
+
+    const client = getSupabaseClient();
+
+    if (!client) return;
+
+    const field = tradeSession.role === "player1" ? "player1_confirmed" : "player2_confirmed";
+
+    await client
+        .from("trades")
+        .update({ [field]: true, updated_at: new Date().toISOString() })
+        .eq("code", tradeSession.code);
+}
+
+async function cancelTrade() {
+
+    if (!tradeSession) return;
+
+    if (!confirm("Annuler cet échange ?")) return;
+
+    const client = getSupabaseClient();
+
+    if (client) {
+        await client
+            .from("trades")
+            .update({ status: "cancelled", updated_at: new Date().toISOString() })
+            .eq("code", tradeSession.code)
+            .in("status", ["waiting", "active"]);
+    }
+
+    closeTradeWindow();
+}
+
+// Retire ma créature donnée (par son ancien identifiant) et ajoute la
+// créature reçue (avec un nouvel identifiant local, propre à mon compte).
+function applyTradeLocally(myCreatureUid, receivedCreature) {
+
+    const location = findCreatureLocation(myCreatureUid);
+
+    if (location) {
+        location.list.splice(location.index, 1);
+    }
+
+    const received = { ...receivedCreature, uid: Date.now() + Math.random() };
+
+    if (currentPlayer.team.length < MAX_TEAM_SIZE) {
+        currentPlayer.team.push(received);
+    } else {
+        currentPlayer.storage.push(received);
+    }
+
+    markPokedexCaught(received.id);
+
+    if (currentPlayer.activeCreature >= currentPlayer.team.length) {
+        currentPlayer.activeCreature = Math.max(0, currentPlayer.team.length - 1);
+    }
+
+    updateTeamDisplay();
+    saveGame();
+}
+
+function handleTradeRowUpdate(row) {
+
+    if (!tradeSession || row.code !== tradeSession.code) return;
+
+    tradeSession.row = row;
+
+    if (row.status === "cancelled") {
+        alert("L'échange a été annulé.");
+        closeTradeWindow();
+        return;
+    }
+
+    if (row.status === "waiting") {
+        renderTradeWaitingScreen();
+        return;
+    }
+
+    if (!document.getElementById("tradeBox")) {
+        openTradeScreen();
+    }
+
+    renderTradeScreen(row);
+
+    const bothConfirmed = row.player1_confirmed && row.player2_confirmed;
+
+    if (bothConfirmed && !tradeSession.applied) {
+
+        tradeSession.applied = true;
+
+        const isP1 = tradeSession.role === "player1";
+        const myCreature = isP1 ? row.player1_creature : row.player2_creature;
+        const theirCreature = isP1 ? row.player2_creature : row.player1_creature;
+
+        applyTradeLocally(myCreature.uid, theirCreature);
+        renderTradeScreen({ ...row, status: "finished" });
+
+        const client = getSupabaseClient();
+
+        if (client) {
+            client
+                .from("trades")
+                .update({ status: "finished", updated_at: new Date().toISOString() })
+                .eq("code", row.code)
+                .eq("status", "active")
+                .then(() => {});
+        }
+    }
+}
+
+function closeTradeWindow() {
+
+    if (tradeSession && tradeSession.channel) {
+        const client = getSupabaseClient();
+        if (client) client.removeChannel(tradeSession.channel);
+    }
+
+    tradeSession = null;
+    tradeOpen = false;
+
+    const tradeWindow = document.getElementById("tradeWindow");
+
+    if (tradeWindow) tradeWindow.remove();
 }
 
 function stepToward(current, target, speed) {
